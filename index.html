@@ -393,7 +393,22 @@
       </div>
     </div>
     <div class="card">
-      <h2>Nova receita</h2>
+      <h2>🥣 Componentes reutilizáveis</h2>
+      <p class="section-note">Bases usadas em mais de um sabor, tipo a calda de caramelo. Cadastre uma vez, use em quantas receitas quiser.</p>
+      <label>Nome do componente</label>
+      <input type="text" id="novoComponenteNome" placeholder="Ex: Calda de caramelo">
+      <div id="novoComponenteIngredientes"></div>
+      <div class="row" style="margin-bottom:10px;">
+        <select id="selectComponenteItem"></select>
+        <input type="number" id="inputComponenteQtd" placeholder="Qtd" class="mono">
+      </div>
+      <button class="btn-ghost btn-small" id="btnAddComponenteIngrediente" style="margin-bottom:10px;">+ Adicionar ingrediente</button>
+      <button class="btn-primary" id="btnSalvarComponente">Salvar componente</button>
+      <div class="divider-label">Componentes cadastrados</div>
+      <div id="componentesList"></div>
+    </div>
+    <div class="card">
+      <h2 id="receitaFormTitulo">Nova receita</h2>
       <label>Nome da receita</label>
       <input type="text" id="novaReceitaNome" placeholder="Ex: Pudim de leite condensado">
       <label>Rendimento (fatias por pudim inteiro)</label>
@@ -401,6 +416,9 @@
       <label>Horas de forno para esta receita</label>
       <input type="number" id="novaReceitaHoras" class="mono" step="0.1" placeholder="Ex: 2">
       <p class="section-note" style="margin-top:-8px;" id="novaReceitaCustoPreview">O custo de energia é calculado sozinho a partir da configuração do forno acima.</p>
+      <div class="divider-label">🥣 Componentes usados (opcional)</div>
+      <div id="novaReceitaComponentesLista"></div>
+      <div class="divider-label">Ingredientes diretos desta receita</div>
       <div id="novaReceitaIngredientes"></div>
       <div class="row" style="margin-bottom:10px;">
         <select id="selectIngredienteItem"></select>
@@ -408,6 +426,7 @@
       </div>
       <button class="btn-ghost btn-small" id="btnAddIngrediente" style="margin-bottom:10px;">+ Adicionar ingrediente</button>
       <button class="btn-primary" id="btnSalvarReceita">Salvar receita</button>
+      <button class="btn-ghost hidden" id="btnCancelarEdicaoReceita" style="margin-top:8px;">Cancelar edição</button>
     </div>
     <div class="card">
       <h2>Receitas cadastradas</h2>
@@ -423,7 +442,8 @@
     </div>
     <div class="card" id="precificacaoResultadoCard" style="display:none;">
       <h2 id="precifTitulo">Precificação</h2>
-      <div class="summary-line"><span>Custo dos ingredientes</span><span class="mono" id="precifCustoIngredientes">R$ 0,00</span></div>
+      <div class="summary-line"><span>Custo dos ingredientes diretos</span><span class="mono" id="precifCustoIngredientes">R$ 0,00</span></div>
+      <div class="summary-line"><span>Custo dos componentes</span><span class="mono" id="precifCustoComponentes">R$ 0,00</span></div>
       <div class="divider-label">🎁 Embalagens padrão desta receita</div>
       <div id="precifEmbalagensLista"></div>
       <div class="summary-line"><span>Custo de embalagem</span><span class="mono" id="precifCustoEmbalagem">R$ 0,00</span></div>
@@ -639,7 +659,7 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 
-let state = { custosItens: [], embalagens: [], receitas: [], vendas: [], consumos: [], config: { potenciaForno: 1800, valorKwh: 1.2006 } };
+let state = { custosItens: [], embalagens: [], componentes: [], receitas: [], vendas: [], consumos: [], config: { potenciaForno: 1800, valorKwh: 1.2006 } };
 let novaReceitaIngredientesTemp = [];
 let receitaSelecionadaId = null;
 let currentPhotoBase64 = null;
@@ -685,8 +705,8 @@ function custoEmbalagemReceita(r){
   return custoEmbalagensSelecionadas(r.embalagemPadrao||[]);
 }
 function custoBaseReceita(r){
-  // ingredientes + energia, sem embalagem (embalagem varia por venda)
-  return custoItensReceita(r) + custoFixoReceita(r);
+  // ingredientes diretos + componentes reutilizáveis + energia, sem embalagem (embalagem varia por venda)
+  return custoItensReceita(r) + custoComponentesReceita(r) + custoFixoReceita(r);
 }
 function custoTotalReceita(r){
   // usado na Precificação e nos gráficos por receita: inclui a embalagem padrão marcada
@@ -750,9 +770,10 @@ async function loadState(){
       const data = docSnap.data();
       if(data && data.json){
         const parsed = JSON.parse(data.json);
-        state = Object.assign({custosItens:[],embalagens:[],receitas:[],vendas:[],consumos:[],config:{potenciaForno:1800,valorKwh:1.2006}}, parsed);
+        state = Object.assign({custosItens:[],embalagens:[],componentes:[],receitas:[],vendas:[],consumos:[],config:{potenciaForno:1800,valorKwh:1.2006}}, parsed);
         if(!state.config) state.config = {potenciaForno:1800, valorKwh:1.2006};
         if(!state.embalagens) state.embalagens = [];
+        if(!state.componentes) state.componentes = [];
         migrarEmbalagensAntigas();
       }
     }
@@ -942,6 +963,7 @@ function renderExtractedItems(){
         renderItensBase('ingrediente');
         renderItensBase('embalagem');
         renderSelectIngredienteItem();
+        renderSelectComponenteItem();
       }
     });
   });
@@ -991,7 +1013,7 @@ document.getElementById('btnSalvarManual').addEventListener('click', ()=>{
   document.getElementById('calcEmbalagens').value='';
   document.getElementById('calcUnidadesPorEmbalagem').value='';
   document.getElementById('manualItemForm').classList.add('hidden');
-  saveState().then(()=>{ renderItensBase('ingrediente'); renderSelectIngredienteItem(); showToast('Ingrediente adicionado.'); });
+  saveState().then(()=>{ renderItensBase('ingrediente'); renderSelectIngredienteItem(); renderSelectComponenteItem(); showToast('Ingrediente adicionado.'); });
 });
 
 document.getElementById('btnAddEmbalagemManual').addEventListener('click', ()=>{
@@ -1103,7 +1125,7 @@ function removerItem(tipo, id){
   }else{
     state.embalagens = state.embalagens.filter(i=>i.id!==id);
   }
-  saveState().then(()=>{ renderItensBase(tipo); if(tipo==='ingrediente') renderSelectIngredienteItem(); });
+  saveState().then(()=>{ renderItensBase(tipo); if(tipo==='ingrediente'){ renderSelectIngredienteItem(); renderSelectComponenteItem(); } });
 }
 
 // ---------- HISTÓRICO DE CUSTOS ----------
@@ -1215,6 +1237,113 @@ function renderSelectIngredienteItem(){
   sel.innerHTML = state.custosItens.map(i=>`<option value="${i.id}">${escapeHtml(i.nome)}</option>`).join('');
 }
 
+// ---------- COMPONENTES REUTILIZÁVEIS ----------
+let componenteIngredientesTemp = [];
+
+function renderSelectComponenteItem(){
+  const sel = document.getElementById('selectComponenteItem');
+  if(state.custosItens.length===0){
+    sel.innerHTML = `<option value="">Cadastre ingredientes primeiro</option>`;
+    return;
+  }
+  sel.innerHTML = state.custosItens.map(i=>`<option value="${i.id}">${escapeHtml(i.nome)}</option>`).join('');
+}
+
+document.getElementById('btnAddComponenteIngrediente').addEventListener('click', ()=>{
+  const itemId = document.getElementById('selectComponenteItem').value;
+  const qtd = parseFloat(document.getElementById('inputComponenteQtd').value);
+  if(!itemId || !qtd){ showToast('Escolha um item e uma quantidade.'); return; }
+  const item = state.custosItens.find(i=>i.id===itemId);
+  componenteIngredientesTemp.push({itemId, nome:item.nome, quantidade:qtd});
+  document.getElementById('inputComponenteQtd').value='';
+  renderComponenteIngredientesTemp();
+});
+
+function renderComponenteIngredientesTemp(){
+  const el = document.getElementById('novoComponenteIngredientes');
+  el.innerHTML = componenteIngredientesTemp.map((ing,idx)=>`
+    <div class="ingredient-item">
+      <span>${escapeHtml(ing.nome)} — ${ing.quantidade}</span>
+      <button class="btn-danger-ghost" onclick="removerComponenteIngredienteTemp(${idx})">remover</button>
+    </div>
+  `).join('');
+}
+function removerComponenteIngredienteTemp(idx){
+  componenteIngredientesTemp.splice(idx,1);
+  renderComponenteIngredientesTemp();
+}
+
+document.getElementById('btnSalvarComponente').addEventListener('click', ()=>{
+  const nome = document.getElementById('novoComponenteNome').value.trim();
+  if(!nome){ showToast('Dê um nome para o componente.'); return; }
+  if(componenteIngredientesTemp.length===0){ showToast('Adicione pelo menos um ingrediente.'); return; }
+  state.componentes.push({ id:uid(), nome, ingredientes:[...componenteIngredientesTemp] });
+  componenteIngredientesTemp = [];
+  document.getElementById('novoComponenteNome').value='';
+  renderComponenteIngredientesTemp();
+  saveState().then(ok=>{
+    if(ok){ showToast('Componente salvo.'); renderComponentesList(); renderComponentesChecklist(); }
+  });
+});
+
+function custoComponente(comp){
+  let total = 0;
+  comp.ingredientes.forEach(ing=>{
+    const item = state.custosItens.find(i=>i.id===ing.itemId);
+    if(item) total += item.precoUnitario*ing.quantidade;
+  });
+  return total;
+}
+function custoComponentesReceita(r){
+  let total = 0;
+  (r.componentes||[]).forEach(compId=>{
+    const comp = state.componentes.find(c=>c.id===compId);
+    if(comp) total += custoComponente(comp);
+  });
+  return total;
+}
+
+function renderComponentesList(){
+  const el = document.getElementById('componentesList');
+  if(state.componentes.length===0){
+    el.innerHTML = `<div class="empty-state"><span class="drip-icon">🥣</span><strong>Nenhum componente ainda</strong><span>Cadastre a calda ou outra base para reaproveitar em várias receitas.</span></div>`;
+    return;
+  }
+  el.innerHTML = state.componentes.map(c=>`
+    <div class="receita-card">
+      <h3>${escapeHtml(c.nome)}</h3>
+      <p>${c.ingredientes.length} ingredientes · custo ${brl(custoComponente(c))}</p>
+      <button class="btn-danger-ghost" onclick="removerComponente('${c.id}')">excluir componente</button>
+    </div>
+  `).join('');
+}
+function removerComponente(id){
+  state.componentes = state.componentes.filter(c=>c.id!==id);
+  state.receitas.forEach(r=>{ if(r.componentes) r.componentes = r.componentes.filter(cid=>cid!==id); });
+  saveState().then(()=>{ renderComponentesList(); renderComponentesChecklist(); renderReceitasList(); });
+}
+
+function renderComponentesChecklist(marcados){
+  marcados = marcados || [];
+  const el = document.getElementById('novaReceitaComponentesLista');
+  if(state.componentes.length===0){
+    el.innerHTML = `<div class="section-note">Nenhum componente cadastrado ainda. Não é obrigatório usar.</div>`;
+    return;
+  }
+  el.innerHTML = state.componentes.map(c=>`
+    <div class="emb-check-row">
+      <label class="emb-check-label">
+        <input type="checkbox" class="comp-check" value="${c.id}" ${marcados.includes(c.id)?'checked':''}>
+        <span>${escapeHtml(c.nome)} <span class="item-sub">(${brl(custoComponente(c))})</span></span>
+      </label>
+    </div>
+  `).join('');
+}
+function lerComponentesChecklist(){
+  return Array.from(document.querySelectorAll('.comp-check:checked')).map(chk=>chk.value);
+}
+
+// ---------- RECEITAS: INGREDIENTES ----------
 document.getElementById('btnAddIngrediente').addEventListener('click', ()=>{
   const itemId = document.getElementById('selectIngredienteItem').value;
   const qtd = parseFloat(document.getElementById('inputIngredienteQtd').value);
@@ -1248,14 +1377,35 @@ document.getElementById('novaReceitaHoras').addEventListener('input', ()=>{
     : 'O custo de energia é calculado sozinho a partir da configuração do forno acima.';
 });
 
+let receitaEditandoId = null;
+
 document.getElementById('btnSalvarReceita').addEventListener('click', ()=>{
   const nome = document.getElementById('novaReceitaNome').value.trim();
   const fatias = parseInt(document.getElementById('novaReceitaFatias').value)||1;
   const horas = parseFloat(document.getElementById('novaReceitaHoras').value)||0;
+  const componentesEscolhidos = lerComponentesChecklist();
   if(!nome){ showToast('Dê um nome para a receita.'); return; }
-  if(novaReceitaIngredientesTemp.length===0){ showToast('Adicione pelo menos um ingrediente.'); return; }
+  if(novaReceitaIngredientesTemp.length===0 && componentesEscolhidos.length===0){ showToast('Adicione pelo menos um ingrediente ou componente.'); return; }
+
+  if(receitaEditandoId){
+    const r = state.receitas.find(x=>x.id===receitaEditandoId);
+    if(r){
+      r.nome = nome;
+      r.rendimentoFatias = fatias;
+      r.horasForno = horas;
+      r.componentes = componentesEscolhidos;
+      r.ingredientes = [...novaReceitaIngredientesTemp];
+    }
+    cancelarEdicaoReceita();
+    saveState().then(ok=>{
+      if(ok){ showToast('Receita atualizada.'); renderReceitasList(); renderPrecificacaoReceitas(); renderVendaReceitaSelect(); renderConsumoReceitaSelect(); }
+    });
+    return;
+  }
+
   state.receitas.push({
     id:uid(), nome, rendimentoFatias:fatias, horasForno:horas,
+    componentes: componentesEscolhidos,
     ingredientes:[...novaReceitaIngredientesTemp],
     precoVendaFatia:0, precoVendaInteiro:0
   });
@@ -1264,10 +1414,41 @@ document.getElementById('btnSalvarReceita').addEventListener('click', ()=>{
   document.getElementById('novaReceitaFatias').value='';
   document.getElementById('novaReceitaHoras').value='';
   renderNovaReceitaIngredientes();
+  renderComponentesChecklist();
   saveState().then(ok=>{
     if(ok){ showToast('Receita salva.'); renderReceitasList(); renderPrecificacaoReceitas(); renderVendaReceitaSelect(); renderConsumoReceitaSelect(); }
   });
 });
+
+function editarReceita(id){
+  const r = state.receitas.find(x=>x.id===id);
+  if(!r) return;
+  receitaEditandoId = id;
+  document.getElementById('receitaFormTitulo').textContent = 'Editando: ' + r.nome;
+  document.getElementById('novaReceitaNome').value = r.nome;
+  document.getElementById('novaReceitaFatias').value = r.rendimentoFatias;
+  document.getElementById('novaReceitaHoras').value = r.horasForno||'';
+  novaReceitaIngredientesTemp = r.ingredientes.map(ing=>({...ing}));
+  renderNovaReceitaIngredientes();
+  renderComponentesChecklist(r.componentes||[]);
+  document.getElementById('btnSalvarReceita').textContent = 'Salvar alterações';
+  document.getElementById('btnCancelarEdicaoReceita').classList.remove('hidden');
+  document.getElementById('tab-receitas').scrollIntoView({behavior:'smooth'});
+}
+
+function cancelarEdicaoReceita(){
+  receitaEditandoId = null;
+  document.getElementById('receitaFormTitulo').textContent = 'Nova receita';
+  document.getElementById('novaReceitaNome').value = '';
+  document.getElementById('novaReceitaFatias').value = '';
+  document.getElementById('novaReceitaHoras').value = '';
+  novaReceitaIngredientesTemp = [];
+  renderNovaReceitaIngredientes();
+  renderComponentesChecklist();
+  document.getElementById('btnSalvarReceita').textContent = 'Salvar receita';
+  document.getElementById('btnCancelarEdicaoReceita').classList.add('hidden');
+}
+document.getElementById('btnCancelarEdicaoReceita').addEventListener('click', cancelarEdicaoReceita);
 
 function renderReceitasList(){
   const el = document.getElementById('receitasList');
@@ -1275,16 +1456,22 @@ function renderReceitasList(){
     el.innerHTML = `<div class="empty-state"><span class="drip-icon">📖</span><strong>Nenhuma receita ainda</strong><span>Cadastre sua primeira receita acima.</span></div>`;
     return;
   }
-  el.innerHTML = state.receitas.map(r=>`
+  el.innerHTML = state.receitas.map(r=>{
+    const compNomes = (r.componentes||[]).map(cid=>{ const c=state.componentes.find(x=>x.id===cid); return c?c.nome:null; }).filter(Boolean);
+    return `
     <div class="receita-card">
       <h3>${escapeHtml(r.nome)}</h3>
-      <p>${r.ingredientes.length} itens · rende ${r.rendimentoFatias} fatias · energia ${brl(custoFixoReceita(r))}</p>
-      <button class="btn-danger-ghost" onclick="removerReceita('${r.id}')">excluir receita</button>
+      <p>${r.ingredientes.length} itens diretos${compNomes.length?' + '+compNomes.join(', '):''} · rende ${r.rendimentoFatias} fatias · energia ${brl(custoFixoReceita(r))}</p>
+      <div class="row">
+        <button class="btn-ghost btn-small" onclick="editarReceita('${r.id}')">editar</button>
+        <button class="btn-danger-ghost" onclick="removerReceita('${r.id}')">excluir receita</button>
+      </div>
     </div>
-  `).join('');
+  `;}).join('');
 }
 function removerReceita(id){
   state.receitas = state.receitas.filter(r=>r.id!==id);
+  if(receitaEditandoId===id) cancelarEdicaoReceita();
   saveState().then(()=>{ renderReceitasList(); renderPrecificacaoReceitas(); renderVendaReceitaSelect(); renderConsumoReceitaSelect(); });
 }
 
@@ -1328,12 +1515,14 @@ function atualizarTotaisPrecificacao(){
   const r = state.receitas.find(x=>x.id===receitaSelecionadaId);
   if(!r) return;
   const custoItens = custoItensReceita(r);
+  const custoComponentes = custoComponentesReceita(r);
   const selecionadas = lerEmbalagemChecklist('precifEmbalagensLista');
   const custoEmbalagem = custoEmbalagensSelecionadas(selecionadas);
   const custoFixo = custoFixoReceita(r);
-  const custoTotal = custoItens + custoEmbalagem + custoFixo;
+  const custoTotal = custoItens + custoComponentes + custoEmbalagem + custoFixo;
 
   document.getElementById('precifCustoIngredientes').textContent = brl(custoItens);
+  document.getElementById('precifCustoComponentes').textContent = brl(custoComponentes);
   document.getElementById('precifCustoEmbalagem').textContent = brl(custoEmbalagem);
   document.getElementById('precifCustoFixo').textContent = brl(custoFixo);
   document.getElementById('precifCustoTotal').textContent = brl(custoTotal);
@@ -1654,6 +1843,9 @@ function renderAll(){
   renderItensBase('ingrediente');
   renderItensBase('embalagem');
   renderSelectIngredienteItem();
+  renderSelectComponenteItem();
+  renderComponentesList();
+  renderComponentesChecklist();
   renderReceitasList();
   renderPrecificacaoReceitas();
   renderVendaReceitaSelect();
