@@ -143,7 +143,7 @@
   <section class="tab-panel active" id="tab-compras">
     <div class="card">
       <h2>Fotografar nota de compra</h2>
-      <p class="section-note">A leitura automática por IA está temporariamente desativada nesta versão (volta em breve). Por enquanto, use "Adicionar item manualmente" logo abaixo.</p>
+      <p class="section-note">Tire a foto, a IA identifica os itens e valores. Você confere, ajusta o tipo se precisar, e só então salva na base de custos.</p>
       <input type="file" accept="image/*" capture="environment" id="photoInput" style="display:none">
       <button class="btn-primary" id="btnTakePhoto">Tirar foto da nota</button>
       <div id="photoArea"></div>
@@ -505,9 +505,31 @@ document.getElementById('photoInput').addEventListener('change', async (e)=>{
   reader.readAsDataURL(file);
 });
 
+const WORKER_URL = 'https://pudim-ia.lucaswahlbrink.workers.dev';
+
 async function lerNotaComIA(base64, mediaType){
   const area = document.getElementById('photoArea');
-  area.innerHTML += `<div class="section-note">A leitura automática por IA ainda está sendo configurada nesta versão do app. Por enquanto, adicione os itens desta nota manualmente na base de custos logo abaixo. Essa função volta na próxima atualização.</div>`;
+  try{
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ base64, mediaType })
+    });
+    const data = await response.json();
+    if(data.error){ throw new Error(data.error); }
+    const candidate = (data.candidates && data.candidates[0]) || null;
+    let raw = candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]
+      ? candidate.content.parts[0].text
+      : '[]';
+    raw = raw.replace(/```json|```/g,'').trim();
+    let parsed = [];
+    try{ parsed = JSON.parse(raw); }catch(err){ parsed = []; }
+    extractedItems = parsed.map(p=>({id:uid(), nome:p.nome||'', quantidade:p.quantidade||1, valor:p.valor||0, tipo:'ingrediente'}));
+    renderExtractedItems();
+  }catch(err){
+    console.error(err);
+    area.innerHTML += `<div class="section-note">Não consegui ler a nota automaticamente (${err.message || 'erro desconhecido'}). Você pode adicionar os itens manualmente abaixo.</div>`;
+  }
 }
 
 function renderExtractedItems(){
