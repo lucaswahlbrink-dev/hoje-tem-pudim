@@ -211,6 +211,14 @@
     flex:none;
   }
   .emb-qtd{ margin-bottom:0 !important; }
+
+  .calc-box{
+    background:var(--cream);
+    border:1px dashed var(--sugar);
+    border-radius:12px;
+    padding:12px;
+    margin-bottom:14px;
+  }
 </style>
 </head>
 <body>
@@ -264,6 +272,22 @@
         <div id="manualItemForm" class="hidden" style="margin-top:12px;">
           <label>Nome do item</label>
           <input type="text" id="manualNome" placeholder="Ex: Leite condensado">
+          <div class="calc-box">
+            <p class="section-note" style="margin:0 0 8px 0;">🧮 Comprou em caixa/pacote? Preencha aqui para calcular sozinho.</p>
+            <div class="row">
+              <div>
+                <label>Preço total pago (R$)</label>
+                <input type="number" id="calcPrecoTotal" class="mono" placeholder="Ex: 59,40">
+              </div>
+              <div>
+                <label>Embalagens compradas</label>
+                <input type="number" id="calcEmbalagens" class="mono" placeholder="Ex: 9">
+              </div>
+            </div>
+            <label>Unidades dentro de cada embalagem</label>
+            <input type="number" id="calcUnidadesPorEmbalagem" class="mono" placeholder="Ex: 20">
+            <button class="btn-ghost btn-small" id="btnCalcularManual" style="margin-top:4px;">Calcular preço e estoque</button>
+          </div>
           <label>Preço unitário (R$)</label>
           <input type="number" id="manualPreco" class="mono" placeholder="0,00">
           <label>Estoque inicial</label>
@@ -307,6 +331,22 @@
         <div id="manualEmbalagemForm" class="hidden" style="margin-top:12px;">
           <label>Nome da embalagem</label>
           <input type="text" id="manualEmbNome" placeholder="Ex: Pote 200ml">
+          <div class="calc-box">
+            <p class="section-note" style="margin:0 0 8px 0;">🧮 Comprou em caixa/pacote? Preencha aqui para calcular sozinho.</p>
+            <div class="row">
+              <div>
+                <label>Preço total pago (R$)</label>
+                <input type="number" id="calcEmbPrecoTotal" class="mono" placeholder="Ex: 45,00">
+              </div>
+              <div>
+                <label>Embalagens (pacotes) compradas</label>
+                <input type="number" id="calcEmbEmbalagens" class="mono" placeholder="Ex: 1">
+              </div>
+            </div>
+            <label>Unidades dentro de cada pacote</label>
+            <input type="number" id="calcEmbUnidadesPorEmbalagem" class="mono" placeholder="Ex: 100">
+            <button class="btn-ghost btn-small" id="btnCalcularEmbManual" style="margin-top:4px;">Calcular preço e estoque</button>
+          </div>
           <label>Preço unitário (R$)</label>
           <input type="number" id="manualEmbPreco" class="mono" placeholder="0,00">
           <label>Estoque inicial</label>
@@ -927,6 +967,16 @@ document.getElementById('btnAddItemManual').addEventListener('click', ()=>{
 document.getElementById('btnCancelarManual').addEventListener('click', ()=>{
   document.getElementById('manualItemForm').classList.add('hidden');
 });
+document.getElementById('btnCalcularManual').addEventListener('click', ()=>{
+  const precoTotal = parseFloat(document.getElementById('calcPrecoTotal').value)||0;
+  const embalagens = parseFloat(document.getElementById('calcEmbalagens').value)||0;
+  const unidadesPor = parseFloat(document.getElementById('calcUnidadesPorEmbalagem').value)||0;
+  const totalUnidades = embalagens * unidadesPor;
+  if(totalUnidades<=0){ showToast('Preencha embalagens e unidades por embalagem.'); return; }
+  document.getElementById('manualEstoque').value = totalUnidades;
+  if(precoTotal>0) document.getElementById('manualPreco').value = (precoTotal/totalUnidades).toFixed(4);
+  showToast(`${totalUnidades} unidades no total.`);
+});
 document.getElementById('btnSalvarManual').addEventListener('click', ()=>{
   const nome = document.getElementById('manualNome').value.trim();
   const preco = parseFloat(document.getElementById('manualPreco').value)||0;
@@ -937,6 +987,9 @@ document.getElementById('btnSalvarManual').addEventListener('click', ()=>{
   document.getElementById('manualNome').value='';
   document.getElementById('manualPreco').value='';
   document.getElementById('manualEstoque').value='';
+  document.getElementById('calcPrecoTotal').value='';
+  document.getElementById('calcEmbalagens').value='';
+  document.getElementById('calcUnidadesPorEmbalagem').value='';
   document.getElementById('manualItemForm').classList.add('hidden');
   saveState().then(()=>{ renderItensBase('ingrediente'); renderSelectIngredienteItem(); showToast('Ingrediente adicionado.'); });
 });
@@ -946,6 +999,16 @@ document.getElementById('btnAddEmbalagemManual').addEventListener('click', ()=>{
 });
 document.getElementById('btnCancelarEmbalagemManual').addEventListener('click', ()=>{
   document.getElementById('manualEmbalagemForm').classList.add('hidden');
+});
+document.getElementById('btnCalcularEmbManual').addEventListener('click', ()=>{
+  const precoTotal = parseFloat(document.getElementById('calcEmbPrecoTotal').value)||0;
+  const embalagens = parseFloat(document.getElementById('calcEmbEmbalagens').value)||0;
+  const unidadesPor = parseFloat(document.getElementById('calcEmbUnidadesPorEmbalagem').value)||0;
+  const totalUnidades = embalagens * unidadesPor;
+  if(totalUnidades<=0){ showToast('Preencha embalagens e unidades por pacote.'); return; }
+  document.getElementById('manualEmbEstoque').value = totalUnidades;
+  if(precoTotal>0) document.getElementById('manualEmbPreco').value = (precoTotal/totalUnidades).toFixed(4);
+  showToast(`${totalUnidades} unidades no total.`);
 });
 document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()=>{
   const nome = document.getElementById('manualEmbNome').value.trim();
@@ -957,6 +1020,9 @@ document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()
   document.getElementById('manualEmbNome').value='';
   document.getElementById('manualEmbPreco').value='';
   document.getElementById('manualEmbEstoque').value='';
+  document.getElementById('calcEmbPrecoTotal').value='';
+  document.getElementById('calcEmbEmbalagens').value='';
+  document.getElementById('calcEmbUnidadesPorEmbalagem').value='';
   document.getElementById('manualEmbalagemForm').classList.add('hidden');
   saveState().then(()=>{ renderItensBase('embalagem'); showToast('Embalagem adicionada.'); });
 });
