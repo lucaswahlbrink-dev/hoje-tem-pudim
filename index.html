@@ -2,10 +2,977 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Pudim</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Pudim | Gestão do Negócio</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#C97A3B">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#FBF2E1;
+    --surface:#FFFFFF;
+    --caramel:#7A4B2A;
+    --caramel-deep:#5A3419;
+    --sugar:#C97A3B;
+    --sugar-light:#F0C097;
+    --wine:#6E2B3A;
+    --wine-light:#F6E3E6;
+    --ink:#3A2A1E;
+    --muted:#9C8468;
+    --border:#EBDCC3;
+    --good:#3F7A4B;
+    --good-bg:#E8F3E9;
+    --embalagem:#4A6E7A;
+    --embalagem-bg:#E4EEF0;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--cream);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding-bottom:82px;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  header.app-header{padding:22px 20px 0 20px;position:relative;}
+  header.app-header h1{
+    font-family:'Fraunces',serif;font-weight:700;font-optical-sizing:auto;
+    font-size:28px;margin:0 0 2px 0;color:var(--caramel-deep);letter-spacing:-0.01em;
+  }
+  header.app-header p{margin:0 0 14px 0;color:var(--muted);font-size:13px;}
+  .drip{display:block;width:100%;height:16px;margin-bottom:6px;}
+  main{padding:14px 16px 8px 16px;max-width:520px;margin:0 auto;}
+  .tab-panel{display:none;animation:fade .25s ease;}
+  .tab-panel.active{display:block;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 1px 2px rgba(90,52,25,0.04);}
+  .card h2{font-family:'Fraunces',serif;font-size:17px;font-weight:600;margin:0 0 12px 0;color:var(--caramel-deep);}
+  .row{display:flex;gap:10px;}
+  .row > *{flex:1;}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:500;}
+  input, select{
+    width:100%;padding:10px 11px;border:1px solid var(--border);border-radius:10px;
+    background:#FFFDF9;font-size:14px;color:var(--ink);font-family:'Inter',sans-serif;margin-bottom:12px;
+  }
+  input:focus, select:focus{outline:2px solid var(--sugar);outline-offset:1px;border-color:var(--sugar);}
+  button{font-family:'Inter',sans-serif;font-weight:600;font-size:14px;border:none;border-radius:11px;padding:11px 16px;cursor:pointer;transition:transform .1s ease, opacity .15s ease;}
+  button:active{transform:scale(0.97);}
+  .btn-primary{background:var(--sugar);color:#fff;width:100%;}
+  .btn-primary:hover{background:#B96A2E;}
+  .btn-secondary{background:var(--wine-light);color:var(--wine);width:100%;}
+  .btn-ghost{background:transparent;color:var(--caramel);border:1px solid var(--border);}
+  .btn-danger-ghost{background:transparent;color:#A64545;font-size:12px;padding:4px 8px;}
+  .btn-small{padding:8px 12px;font-size:13px;width:auto;}
+  button:disabled{opacity:.5;cursor:not-allowed;}
+
+  .item-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);gap:8px;}
+  .item-row:last-child{border-bottom:none;}
+  .item-name{font-weight:600;font-size:14px;}
+  .item-sub{font-size:12px;color:var(--muted);}
+  .pill{display:inline-block;background:var(--sugar-light);color:var(--caramel-deep);font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;}
+  .pill.embalagem{background:var(--embalagem-bg);color:var(--embalagem);}
+  .empty-state{text-align:center;padding:36px 16px;color:var(--muted);}
+  .empty-state .drip-icon{font-size:30px;display:block;margin-bottom:8px;}
+  .empty-state strong{display:block;color:var(--ink);font-size:15px;margin-bottom:4px;}
+  .empty-state span{font-size:13px;}
+
+  nav.tabbar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;padding:6px 4px calc(6px + env(safe-area-inset-bottom)) 4px;z-index:50;}
+  nav.tabbar button{flex:1;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;color:var(--muted);border-radius:12px;font-size:10.5px;font-weight:600;}
+  nav.tabbar button svg{width:20px;height:20px;}
+  nav.tabbar button.active{color:var(--sugar);background:var(--sugar-light);}
+
+  .ingredient-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);}
+  .ingredient-item:last-child{border-bottom:none;}
+  .ingredient-item span{flex:1;font-size:13px;}
+
+  .receita-card{border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;cursor:pointer;}
+  .receita-card.selected{border-color:var(--sugar);background:var(--sugar-light);}
+  .receita-card h3{margin:0 0 2px 0;font-size:14px;font-family:'Fraunces',serif;color:var(--caramel-deep);}
+  .receita-card p{margin:0;font-size:12px;color:var(--muted);}
+
+  .result-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;}
+  .result-box{background:var(--cream);border-radius:12px;padding:12px;text-align:center;}
+  .result-box.profit{background:var(--good-bg);}
+  .result-box .label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em;}
+  .result-box .value{font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600;margin-top:4px;color:var(--caramel-deep);}
+  .result-box.profit .value{color:var(--good);}
+
+  .photo-preview{width:100%;border-radius:12px;margin-bottom:10px;display:block;}
+  .extracted-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);}
+  .extracted-row input, .extracted-row select{margin-bottom:0;}
+  .extracted-row .ex-nome{flex:1 1 100%;}
+  .extracted-row .tipo{flex:1;min-width:110px;}
+  .extracted-row .qtd{width:64px;flex:none;}
+  .extracted-row .valor{width:74px;flex:none;}
+  .loading-dots{display:flex;gap:4px;align-items:center;justify-content:center;padding:20px;color:var(--muted);font-size:13px;}
+  .toast{position:fixed;bottom:92px;left:50%;transform:translateX(-50%);background:var(--caramel-deep);color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .25s ease, transform .25s ease;z-index:100;white-space:nowrap;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
+  .filter-bar{display:flex;flex-direction:column;gap:0;}
+  .venda-row{padding:12px 0;border-bottom:1px solid var(--border);}
+  .venda-row:last-child{border-bottom:none;}
+  .venda-top{display:flex;justify-content:space-between;font-weight:600;font-size:14px;}
+  .venda-meta{font-size:12px;color:var(--muted);margin-top:2px;}
+  .section-note{font-size:12px;color:var(--muted);margin:-4px 0 12px 0;line-height:1.5;}
+  .summary-line{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;}
+  .summary-line.total{border-top:1px solid var(--border);margin-top:4px;padding-top:10px;font-weight:700;}
+  .divider-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 8px 0;}
+  .canal-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
+  .canal-row:last-child{border-bottom:none;}
+  .hidden{display:none !important;}
+</style>
 </head>
-<body style="font-family: sans-serif; text-align: center; padding-top: 100px;">
-<h1>🍮 Pudim, ponto a ponto</h1>
-<p>Publicação de teste funcionando. O app de verdade entra aqui no próximo passo.</p>
+<body>
+
+<header class="app-header">
+  <h1>Pudim, ponto a ponto</h1>
+  <p>Compras, receitas, preço e venda — tudo num só lugar</p>
+  <svg class="drip" viewBox="0 0 400 16" preserveAspectRatio="none">
+    <path d="M0,0 L400,0 L400,4 C380,4 375,14 360,14 C345,14 340,4 320,4 C300,4 295,15 278,15 C261,15 256,4 235,4 C214,4 209,13 190,13 C171,13 166,4 145,4 C124,4 119,14 100,14 C81,14 76,4 55,4 C34,4 29,10 0,8 Z" fill="#C97A3B" opacity="0.55"/>
+  </svg>
+</header>
+
+<main>
+
+  <!-- ABA COMPRAS -->
+  <section class="tab-panel active" id="tab-compras">
+    <div class="card">
+      <h2>Fotografar nota de compra</h2>
+      <p class="section-note">A leitura automática por IA está temporariamente desativada nesta versão (volta em breve). Por enquanto, use "Adicionar item manualmente" logo abaixo.</p>
+      <input type="file" accept="image/*" capture="environment" id="photoInput" style="display:none">
+      <button class="btn-primary" id="btnTakePhoto">Tirar foto da nota</button>
+      <div id="photoArea"></div>
+    </div>
+
+    <div class="card">
+      <h2>Base de itens de custo</h2>
+      <p class="section-note">Ingredientes e embalagens, com o preço mais recente pago e o estoque atual.</p>
+      <div id="custosList"></div>
+      <button class="btn-ghost btn-small" id="btnAddItemManual" style="margin-top:8px;">+ Adicionar item manualmente</button>
+      <div id="manualItemForm" class="hidden" style="margin-top:12px;">
+        <label>Nome do item</label>
+        <input type="text" id="manualNome" placeholder="Ex: Leite condensado">
+        <div class="row">
+          <div>
+            <label>Tipo</label>
+            <select id="manualTipo">
+              <option value="ingrediente">Ingrediente</option>
+              <option value="embalagem">Embalagem</option>
+            </select>
+          </div>
+          <div>
+            <label>Preço unitário (R$)</label>
+            <input type="number" id="manualPreco" class="mono" placeholder="0,00">
+          </div>
+        </div>
+        <label>Estoque inicial</label>
+        <input type="number" id="manualEstoque" placeholder="0">
+        <div class="row">
+          <button class="btn-primary" id="btnSalvarManual">Salvar item</button>
+          <button class="btn-ghost" id="btnCancelarManual">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABA RECEITAS -->
+  <section class="tab-panel" id="tab-receitas">
+    <div class="card">
+      <h2>Nova receita</h2>
+      <label>Nome da receita</label>
+      <input type="text" id="novaReceitaNome" placeholder="Ex: Pudim de leite condensado">
+      <label>Rendimento (fatias por pudim inteiro)</label>
+      <input type="number" id="novaReceitaFatias" placeholder="Ex: 10">
+      <label>Custo fixo por fornada (R$)</label>
+      <input type="number" id="novaReceitaCustoFixo" class="mono" placeholder="Ex: energia elétrica do forno">
+      <p class="section-note" style="margin-top:-8px;">Calcule: potência do forno em kW × horas de uso ÷ 1000 × valor do kWh da sua conta de luz.</p>
+      <div id="novaReceitaIngredientes"></div>
+      <div class="row" style="margin-bottom:10px;">
+        <select id="selectIngredienteItem"></select>
+        <input type="number" id="inputIngredienteQtd" placeholder="Qtd" class="mono">
+      </div>
+      <button class="btn-ghost btn-small" id="btnAddIngrediente" style="margin-bottom:10px;">+ Adicionar ingrediente ou embalagem</button>
+      <button class="btn-primary" id="btnSalvarReceita">Salvar receita</button>
+    </div>
+    <div class="card">
+      <h2>Receitas cadastradas</h2>
+      <div id="receitasList"></div>
+    </div>
+  </section>
+
+  <!-- ABA PRECIFICAÇÃO -->
+  <section class="tab-panel" id="tab-precificacao">
+    <div class="card">
+      <h2>Escolher receita</h2>
+      <div id="precificacaoReceitas"></div>
+    </div>
+    <div class="card" id="precificacaoResultadoCard" style="display:none;">
+      <h2 id="precifTitulo">Precificação</h2>
+      <div class="summary-line"><span>Custo dos ingredientes e embalagens</span><span class="mono" id="precifCustoIngredientes">R$ 0,00</span></div>
+      <div class="summary-line"><span>Custo fixo (energia etc)</span><span class="mono" id="precifCustoFixo">R$ 0,00</span></div>
+      <div class="summary-line total"><span>Custo total do pudim</span><span class="mono" id="precifCustoTotal">R$ 0,00</span></div>
+      <label style="margin-top:12px;">Preço de venda — fatia</label>
+      <input type="number" id="precoVendaFatia" class="mono" placeholder="0,00">
+      <label>Preço de venda — pudim inteiro</label>
+      <input type="number" id="precoVendaInteiro" class="mono" placeholder="0,00">
+      <button class="btn-secondary" id="btnSalvarPrecos" style="margin-bottom:14px;">Salvar preços de venda</button>
+      <div class="result-grid">
+        <div class="result-box"><div class="label">Custo / fatia</div><div class="value mono" id="resCustoFatia">R$ 0,00</div></div>
+        <div class="result-box profit"><div class="label">Lucro / fatia</div><div class="value mono" id="resLucroFatia">R$ 0,00</div></div>
+        <div class="result-box"><div class="label">Custo / inteiro</div><div class="value mono" id="resCustoInteiro">R$ 0,00</div></div>
+        <div class="result-box profit"><div class="label">Lucro / inteiro</div><div class="value mono" id="resLucroInteiro">R$ 0,00</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABA VENDAS -->
+  <section class="tab-panel" id="tab-vendas">
+    <div class="card">
+      <h2>Registrar venda</h2>
+      <label>Receita vendida</label>
+      <select id="vendaReceita"></select>
+      <div class="row">
+        <div>
+          <label>Tipo</label>
+          <select id="vendaTipo">
+            <option value="fatia">Fatia</option>
+            <option value="inteiro">Pudim inteiro</option>
+          </select>
+        </div>
+        <div>
+          <label>Quantidade</label>
+          <input type="number" id="vendaQtd" placeholder="1">
+        </div>
+      </div>
+      <label>Comprador</label>
+      <input type="text" id="vendaComprador" placeholder="Nome do comprador">
+      <label>Data</label>
+      <input type="date" id="vendaData">
+      <div class="row">
+        <div>
+          <label>Canal</label>
+          <select id="vendaCanal">
+            <option value="feira">Feira</option>
+            <option value="trailer_mae">Trailer da mãe</option>
+            <option value="loja_pai">Loja do pai</option>
+            <option value="ifood">iFood</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div>
+          <label>Forma de pagamento</label>
+          <select id="vendaPagamento">
+            <option value="dinheiro">Dinheiro</option>
+            <option value="pix">Pix</option>
+            <option value="cartao">Cartão</option>
+            <option value="ifood_app">Pago no iFood</option>
+          </select>
+        </div>
+      </div>
+      <div id="vendaTaxaWrap" class="hidden">
+        <label>Taxa da plataforma/cartão (%)</label>
+        <input type="number" id="vendaTaxa" class="mono" placeholder="Ex: 15.2">
+        <p class="section-note" style="margin-top:-8px;">iFood: cerca de 15,2% no plano Básico ou 26,5% no plano Entrega. Cartão: consulte a taxa da sua maquininha.</p>
+      </div>
+      <label>Valor total recebido (bruto, antes de qualquer taxa)</label>
+      <input type="number" id="vendaValor" class="mono" placeholder="0,00">
+      <button class="btn-primary" id="btnRegistrarVenda">Registrar venda</button>
+    </div>
+
+    <div class="card">
+      <h2>Vendas efetuadas</h2>
+      <div class="filter-bar">
+        <label>Filtrar por comprador</label>
+        <input type="text" id="filtroComprador" placeholder="Nome...">
+        <div class="row">
+          <div>
+            <label>De</label>
+            <input type="date" id="filtroDataDe">
+          </div>
+          <div>
+            <label>Até</label>
+            <input type="date" id="filtroDataAte">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Valor mín.</label>
+            <input type="number" id="filtroValorMin" class="mono">
+          </div>
+          <div>
+            <label>Valor máx.</label>
+            <input type="number" id="filtroValorMax" class="mono">
+          </div>
+        </div>
+        <label>Canal</label>
+        <select id="filtroCanal">
+          <option value="">Todos</option>
+          <option value="feira">Feira</option>
+          <option value="trailer_mae">Trailer da mãe</option>
+          <option value="loja_pai">Loja do pai</option>
+          <option value="ifood">iFood</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+      <div id="vendasList"></div>
+    </div>
+
+    <div class="card">
+      <h2>Consumo próprio</h2>
+      <p class="section-note">Pudim que a família comeu, não uma venda. Entra como custo do mês, sem gerar receita.</p>
+      <label>Receita</label>
+      <select id="consumoReceita"></select>
+      <div class="row">
+        <div>
+          <label>Tipo</label>
+          <select id="consumoTipo">
+            <option value="fatia">Fatia</option>
+            <option value="inteiro">Pudim inteiro</option>
+          </select>
+        </div>
+        <div>
+          <label>Quantidade</label>
+          <input type="number" id="consumoQtd" placeholder="1">
+        </div>
+      </div>
+      <label>Data</label>
+      <input type="date" id="consumoData">
+      <button class="btn-secondary" id="btnRegistrarConsumo">Registrar consumo</button>
+      <div id="consumosList" style="margin-top:10px;"></div>
+    </div>
+  </section>
+
+  <!-- ABA PAINEL -->
+  <section class="tab-panel" id="tab-painel">
+    <div class="card">
+      <h2>Este mês</h2>
+      <div class="result-grid">
+        <div class="result-box"><div class="label">Faturamento líquido</div><div class="value mono" id="painelFaturamento">R$ 0,00</div></div>
+        <div class="result-box profit"><div class="label">Lucro estimado</div><div class="value mono" id="painelLucro">R$ 0,00</div></div>
+      </div>
+      <div class="section-note" id="painelConsumoNote" style="margin-top:10px;">Sem consumo próprio registrado este mês.</div>
+    </div>
+    <div class="card">
+      <h2>Vendas por canal</h2>
+      <div id="painelCanais"></div>
+    </div>
+    <div class="card">
+      <h2>Receita mais vendida</h2>
+      <div id="painelMaisVendida" class="section-note" style="margin-top:0;">Sem vendas registradas ainda.</div>
+    </div>
+    <div class="card">
+      <h2>Margem média</h2>
+      <div class="section-note" style="margin-top:0;" id="painelMargem">Cadastre receitas com preço de venda para ver a margem.</div>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<nav class="tabbar">
+  <button class="tab-btn active" data-tab="compras">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.2"/></svg>
+    Compras
+  </button>
+  <button class="tab-btn" data-tab="receitas">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v18M6 3c3 0 3 4 0 4M18 3v7a3 3 0 0 1-6 0V3"/></svg>
+    Receitas
+  </button>
+  <button class="tab-btn" data-tab="precificacao">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M8 7h5.5a2.5 2.5 0 1 1 0 5H8h6a2.5 2.5 0 1 1 0 5H8"/></svg>
+    Preço
+  </button>
+  <button class="tab-btn" data-tab="vendas">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h2l2.4 12.2a2 2 0 0 0 2 1.8h7.2a2 2 0 0 0 2-1.6L20 8H6"/><circle cx="9" cy="20" r="1"/><circle cx="17" cy="20" r="1"/></svg>
+    Vendas
+  </button>
+  <button class="tab-btn" data-tab="painel">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V10M12 19V5M20 19v-7"/></svg>
+    Painel
+  </button>
+</nav>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBE3Q02gvLQFiwIuIlzqab9EELv7cS07Ak",
+  authDomain: "pudim-b565a.firebaseapp.com",
+  projectId: "pudim-b565a",
+  storageBucket: "pudim-b565a.firebasestorage.app",
+  messagingSenderId: "376455603756",
+  appId: "1:376455603756:web:5dec4e4591919f77eb9389"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+let state = { custosItens: [], receitas: [], vendas: [], consumos: [] };
+let novaReceitaIngredientesTemp = [];
+let receitaSelecionadaId = null;
+let currentPhotoBase64 = null;
+let extractedItems = [];
+
+const CANAL_LABEL = {feira:'Feira', trailer_mae:'Trailer da mãe', loja_pai:'Loja do pai', ifood:'iFood', outro:'Outro'};
+const PAGAMENTO_LABEL = {dinheiro:'Dinheiro', pix:'Pix', cartao:'Cartão', ifood_app:'Pago no iFood'};
+
+function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+function brl(n){ return (isFinite(n)?n:0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+function custoTotalReceita(r){
+  let total = 0;
+  r.ingredientes.forEach(ing=>{
+    const item = state.custosItens.find(i=>i.id===ing.itemId);
+    if(item) total += item.precoUnitario*ing.quantidade;
+  });
+  total += (r.custoFixoPorFornada||0);
+  return total;
+}
+function custoItensReceita(r){
+  let total = 0;
+  r.ingredientes.forEach(ing=>{
+    const item = state.custosItens.find(i=>i.id===ing.itemId);
+    if(item) total += item.precoUnitario*ing.quantidade;
+  });
+  return total;
+}
+
+async function loadState(){
+  try{
+    const docSnap = await db.collection('pudim').doc('data').get();
+    if(docSnap.exists){
+      const data = docSnap.data();
+      if(data && data.json){
+        const parsed = JSON.parse(data.json);
+        state = Object.assign({custosItens:[],receitas:[],vendas:[],consumos:[]}, parsed);
+      }
+    }
+  }catch(e){
+    console.log('Sem dados salvos ainda, iniciando vazio.', e);
+  }
+  renderAll();
+}
+
+async function saveState(){
+  try{
+    await db.collection('pudim').doc('data').set({json: JSON.stringify(state)});
+    return true;
+  }catch(e){
+    console.error('Erro ao salvar', e);
+    showToast('Erro ao salvar os dados. Confira sua conexão com a internet.');
+    return false;
+  }
+}
+
+// ---------- TABS ----------
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab==='painel') renderPainel();
+  });
+});
+
+// ---------- COMPRAS: FOTO ----------
+document.getElementById('btnTakePhoto').addEventListener('click', ()=>{
+  document.getElementById('photoInput').click();
+});
+
+document.getElementById('photoInput').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async ()=>{
+    currentPhotoBase64 = reader.result.split(',')[1];
+    const area = document.getElementById('photoArea');
+    area.innerHTML = `<img class="photo-preview" src="${reader.result}"><div class="loading-dots">Lendo a nota com IA...</div>`;
+    await lerNotaComIA(currentPhotoBase64, file.type || 'image/jpeg');
+  };
+  reader.readAsDataURL(file);
+});
+
+async function lerNotaComIA(base64, mediaType){
+  const area = document.getElementById('photoArea');
+  area.innerHTML += `<div class="section-note">A leitura automática por IA ainda está sendo configurada nesta versão do app. Por enquanto, adicione os itens desta nota manualmente na base de custos logo abaixo. Essa função volta na próxima atualização.</div>`;
+}
+
+function renderExtractedItems(){
+  const area = document.getElementById('photoArea');
+  const imgHtml = area.querySelector('img') ? area.querySelector('img').outerHTML : '';
+  if(extractedItems.length===0){
+    area.innerHTML = imgHtml + `<div class="section-note">Nenhum item identificado. Adicione manualmente na base de itens.</div>`;
+    return;
+  }
+  let html = `<div class="card" style="margin-top:10px;"><h2>Confira antes de salvar</h2><p class="section-note">Ajuste nome, tipo, quantidade ou valor se a leitura não ficou perfeita.</p>`;
+  extractedItems.forEach(item=>{
+    html += `
+      <div class="extracted-row" data-id="${item.id}">
+        <input type="text" value="${escapeHtml(item.nome)}" class="ex-nome" placeholder="Nome">
+        <select class="tipo ex-tipo">
+          <option value="ingrediente" ${item.tipo==='ingrediente'?'selected':''}>Ingrediente</option>
+          <option value="embalagem" ${item.tipo==='embalagem'?'selected':''}>Embalagem</option>
+        </select>
+        <input type="number" value="${item.quantidade}" class="ex-qtd qtd mono" placeholder="Qtd">
+        <input type="number" value="${item.valor}" class="ex-valor valor mono" placeholder="R$">
+      </div>`;
+  });
+  html += `<button class="btn-primary" id="btnConfirmarExtracao" style="margin-top:12px;">Confirmar e salvar na base de custos</button></div>`;
+  area.innerHTML = imgHtml + html;
+
+  document.getElementById('btnConfirmarExtracao').addEventListener('click', ()=>{
+    document.querySelectorAll('.extracted-row').forEach(row=>{
+      const nome = row.querySelector('.ex-nome').value.trim();
+      const tipo = row.querySelector('.ex-tipo').value;
+      const qtd = parseFloat(row.querySelector('.ex-qtd').value)||1;
+      const valor = parseFloat(row.querySelector('.ex-valor').value)||0;
+      if(!nome) return;
+      const custoUnitario = qtd>0 ? valor/qtd : valor;
+      const existente = state.custosItens.find(i=>i.nome.toLowerCase()===nome.toLowerCase());
+      if(existente){
+        existente.precoUnitario = custoUnitario;
+        existente.tipo = tipo;
+        existente.estoqueAtual = (existente.estoqueAtual||0) + qtd;
+        existente.ultimaAtualizacao = new Date().toISOString();
+      }else{
+        state.custosItens.push({id:uid(), nome, tipo, precoUnitario:custoUnitario, estoqueAtual:qtd, ultimaAtualizacao:new Date().toISOString()});
+      }
+    });
+    saveState().then(ok=>{
+      if(ok){
+        showToast('Itens salvos na base de custos.');
+        document.getElementById('photoArea').innerHTML='';
+        renderCustosList();
+        renderSelectIngredienteItem();
+      }
+    });
+  });
+}
+
+// ---------- COMPRAS: ITEM MANUAL ----------
+document.getElementById('btnAddItemManual').addEventListener('click', ()=>{
+  document.getElementById('manualItemForm').classList.remove('hidden');
+});
+document.getElementById('btnCancelarManual').addEventListener('click', ()=>{
+  document.getElementById('manualItemForm').classList.add('hidden');
+});
+document.getElementById('btnSalvarManual').addEventListener('click', ()=>{
+  const nome = document.getElementById('manualNome').value.trim();
+  const tipo = document.getElementById('manualTipo').value;
+  const preco = parseFloat(document.getElementById('manualPreco').value)||0;
+  const estoque = parseFloat(document.getElementById('manualEstoque').value)||0;
+  if(!nome){ showToast('Dê um nome para o item.'); return; }
+  state.custosItens.push({id:uid(), nome, tipo, precoUnitario:preco, estoqueAtual:estoque, ultimaAtualizacao:new Date().toISOString()});
+  document.getElementById('manualNome').value='';
+  document.getElementById('manualPreco').value='';
+  document.getElementById('manualEstoque').value='';
+  document.getElementById('manualItemForm').classList.add('hidden');
+  saveState().then(()=>{ renderCustosList(); renderSelectIngredienteItem(); showToast('Item adicionado.'); });
+});
+
+function renderCustosList(){
+  const el = document.getElementById('custosList');
+  if(state.custosItens.length===0){
+    el.innerHTML = `<div class="empty-state"><span class="drip-icon">🍮</span><strong>Nenhum item ainda</strong><span>Tire uma foto de uma nota ou adicione manualmente.</span></div>`;
+    return;
+  }
+  el.innerHTML = state.custosItens.map(item=>`
+    <div class="item-row">
+      <div>
+        <div class="item-name">${escapeHtml(item.nome)} <span class="pill ${item.tipo==='embalagem'?'embalagem':''}">${item.tipo==='embalagem'?'embalagem':'ingrediente'}</span></div>
+        <div class="item-sub">Estoque: ${item.estoqueAtual??0} · atualizado em ${new Date(item.ultimaAtualizacao).toLocaleDateString('pt-BR')}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="mono item-name">${brl(item.precoUnitario)}</div>
+        <button class="btn-danger-ghost" onclick="ajustarEstoque('${item.id}')">estoque</button>
+        <button class="btn-danger-ghost" onclick="removerItemCusto('${item.id}')">remover</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function ajustarEstoque(id){
+  const item = state.custosItens.find(i=>i.id===id);
+  if(!item) return;
+  const novo = prompt('Novo estoque atual de "'+item.nome+'":', item.estoqueAtual||0);
+  if(novo===null) return;
+  item.estoqueAtual = parseFloat(novo)||0;
+  saveState().then(()=>renderCustosList());
+}
+
+function removerItemCusto(id){
+  state.custosItens = state.custosItens.filter(i=>i.id!==id);
+  saveState().then(()=>{ renderCustosList(); renderSelectIngredienteItem(); });
+}
+
+// ---------- RECEITAS ----------
+function renderSelectIngredienteItem(){
+  const sel = document.getElementById('selectIngredienteItem');
+  if(state.custosItens.length===0){
+    sel.innerHTML = `<option value="">Cadastre itens de custo primeiro</option>`;
+    return;
+  }
+  sel.innerHTML = state.custosItens.map(i=>`<option value="${i.id}">${escapeHtml(i.nome)} (${i.tipo==='embalagem'?'embalagem':'ingrediente'})</option>`).join('');
+}
+
+document.getElementById('btnAddIngrediente').addEventListener('click', ()=>{
+  const itemId = document.getElementById('selectIngredienteItem').value;
+  const qtd = parseFloat(document.getElementById('inputIngredienteQtd').value);
+  if(!itemId || !qtd){ showToast('Escolha um item e uma quantidade.'); return; }
+  const item = state.custosItens.find(i=>i.id===itemId);
+  novaReceitaIngredientesTemp.push({itemId, nome:item.nome, quantidade:qtd, tipo:item.tipo});
+  document.getElementById('inputIngredienteQtd').value='';
+  renderNovaReceitaIngredientes();
+});
+
+function renderNovaReceitaIngredientes(){
+  const el = document.getElementById('novaReceitaIngredientes');
+  el.innerHTML = novaReceitaIngredientesTemp.map((ing,idx)=>`
+    <div class="ingredient-item">
+      <span>${escapeHtml(ing.nome)} <span class="pill ${ing.tipo==='embalagem'?'embalagem':''}">${ing.tipo==='embalagem'?'embalagem':'ingrediente'}</span> — ${ing.quantidade}</span>
+      <button class="btn-danger-ghost" onclick="removerIngredienteTemp(${idx})">remover</button>
+    </div>
+  `).join('');
+}
+function removerIngredienteTemp(idx){
+  novaReceitaIngredientesTemp.splice(idx,1);
+  renderNovaReceitaIngredientes();
+}
+
+document.getElementById('btnSalvarReceita').addEventListener('click', ()=>{
+  const nome = document.getElementById('novaReceitaNome').value.trim();
+  const fatias = parseInt(document.getElementById('novaReceitaFatias').value)||1;
+  const custoFixo = parseFloat(document.getElementById('novaReceitaCustoFixo').value)||0;
+  if(!nome){ showToast('Dê um nome para a receita.'); return; }
+  if(novaReceitaIngredientesTemp.length===0){ showToast('Adicione pelo menos um ingrediente.'); return; }
+  state.receitas.push({
+    id:uid(), nome, rendimentoFatias:fatias, custoFixoPorFornada:custoFixo,
+    ingredientes:[...novaReceitaIngredientesTemp],
+    precoVendaFatia:0, precoVendaInteiro:0
+  });
+  novaReceitaIngredientesTemp = [];
+  document.getElementById('novaReceitaNome').value='';
+  document.getElementById('novaReceitaFatias').value='';
+  document.getElementById('novaReceitaCustoFixo').value='';
+  renderNovaReceitaIngredientes();
+  saveState().then(ok=>{
+    if(ok){ showToast('Receita salva.'); renderReceitasList(); renderPrecificacaoReceitas(); renderVendaReceitaSelect(); renderConsumoReceitaSelect(); }
+  });
+});
+
+function renderReceitasList(){
+  const el = document.getElementById('receitasList');
+  if(state.receitas.length===0){
+    el.innerHTML = `<div class="empty-state"><span class="drip-icon">📖</span><strong>Nenhuma receita ainda</strong><span>Cadastre sua primeira receita acima.</span></div>`;
+    return;
+  }
+  el.innerHTML = state.receitas.map(r=>`
+    <div class="receita-card">
+      <h3>${escapeHtml(r.nome)}</h3>
+      <p>${r.ingredientes.length} itens · rende ${r.rendimentoFatias} fatias · custo fixo ${brl(r.custoFixoPorFornada||0)}</p>
+      <button class="btn-danger-ghost" onclick="removerReceita('${r.id}')">excluir receita</button>
+    </div>
+  `).join('');
+}
+function removerReceita(id){
+  state.receitas = state.receitas.filter(r=>r.id!==id);
+  saveState().then(()=>{ renderReceitasList(); renderPrecificacaoReceitas(); renderVendaReceitaSelect(); renderConsumoReceitaSelect(); });
+}
+
+// ---------- PRECIFICAÇÃO ----------
+function renderPrecificacaoReceitas(){
+  const el = document.getElementById('precificacaoReceitas');
+  if(state.receitas.length===0){
+    el.innerHTML = `<div class="empty-state"><span class="drip-icon">💰</span><strong>Cadastre uma receita primeiro</strong><span>A precificação usa os ingredientes da receita.</span></div>`;
+    document.getElementById('precificacaoResultadoCard').style.display='none';
+    return;
+  }
+  el.innerHTML = state.receitas.map(r=>`
+    <div class="receita-card ${r.id===receitaSelecionadaId?'selected':''}" onclick="selecionarReceitaPrecificacao('${r.id}')">
+      <h3>${escapeHtml(r.nome)}</h3>
+      <p>${r.ingredientes.length} itens · rende ${r.rendimentoFatias} fatias</p>
+    </div>
+  `).join('');
+}
+
+function selecionarReceitaPrecificacao(id){
+  receitaSelecionadaId = id;
+  renderPrecificacaoReceitas();
+  calcularPrecificacao();
+}
+
+function calcularPrecificacao(){
+  const r = state.receitas.find(x=>x.id===receitaSelecionadaId);
+  const card = document.getElementById('precificacaoResultadoCard');
+  if(!r){ card.style.display='none'; return; }
+  card.style.display='block';
+  document.getElementById('precifTitulo').textContent = 'Precificação — ' + r.nome;
+
+  const custoItens = custoItensReceita(r);
+  const custoFixo = r.custoFixoPorFornada||0;
+  const custoTotal = custoItens + custoFixo;
+
+  document.getElementById('precifCustoIngredientes').textContent = brl(custoItens);
+  document.getElementById('precifCustoFixo').textContent = brl(custoFixo);
+  document.getElementById('precifCustoTotal').textContent = brl(custoTotal);
+  document.getElementById('precoVendaFatia').value = r.precoVendaFatia || '';
+  document.getElementById('precoVendaInteiro').value = r.precoVendaInteiro || '';
+
+  const custoFatia = custoTotal / (r.rendimentoFatias||1);
+  const lucroFatia = (r.precoVendaFatia||0) - custoFatia;
+  const lucroInteiro = (r.precoVendaInteiro||0) - custoTotal;
+
+  document.getElementById('resCustoFatia').textContent = brl(custoFatia);
+  document.getElementById('resLucroFatia').textContent = brl(lucroFatia);
+  document.getElementById('resCustoInteiro').textContent = brl(custoTotal);
+  document.getElementById('resLucroInteiro').textContent = brl(lucroInteiro);
+}
+
+document.getElementById('btnSalvarPrecos').addEventListener('click', ()=>{
+  const r = state.receitas.find(x=>x.id===receitaSelecionadaId);
+  if(!r) return;
+  r.precoVendaFatia = parseFloat(document.getElementById('precoVendaFatia').value)||0;
+  r.precoVendaInteiro = parseFloat(document.getElementById('precoVendaInteiro').value)||0;
+  saveState().then(ok=>{
+    if(ok){ showToast('Preços salvos.'); calcularPrecificacao(); }
+  });
+});
+
+// ---------- VENDAS ----------
+function renderVendaReceitaSelect(){
+  const sel = document.getElementById('vendaReceita');
+  if(state.receitas.length===0){
+    sel.innerHTML = `<option value="">Cadastre uma receita primeiro</option>`;
+    return;
+  }
+  sel.innerHTML = state.receitas.map(r=>`<option value="${r.id}">${escapeHtml(r.nome)}</option>`).join('');
+}
+
+function atualizarVisibilidadeTaxa(){
+  const canal = document.getElementById('vendaCanal').value;
+  const pagamento = document.getElementById('vendaPagamento').value;
+  const wrap = document.getElementById('vendaTaxaWrap');
+  if(canal==='ifood' || pagamento==='cartao' || pagamento==='ifood_app'){
+    wrap.classList.remove('hidden');
+  }else{
+    wrap.classList.add('hidden');
+  }
+}
+document.getElementById('vendaCanal').addEventListener('change', atualizarVisibilidadeTaxa);
+document.getElementById('vendaPagamento').addEventListener('change', atualizarVisibilidadeTaxa);
+
+document.getElementById('btnRegistrarVenda').addEventListener('click', ()=>{
+  const receitaId = document.getElementById('vendaReceita').value;
+  const tipo = document.getElementById('vendaTipo').value;
+  const qtd = parseFloat(document.getElementById('vendaQtd').value)||1;
+  const comprador = document.getElementById('vendaComprador').value.trim();
+  const data = document.getElementById('vendaData').value || new Date().toISOString().slice(0,10);
+  const canal = document.getElementById('vendaCanal').value;
+  const formaPagamento = document.getElementById('vendaPagamento').value;
+  const taxaPercentual = parseFloat(document.getElementById('vendaTaxa').value)||0;
+  const valor = parseFloat(document.getElementById('vendaValor').value);
+  if(!comprador){ showToast('Informe o nome do comprador.'); return; }
+  if(!valor && valor!==0){ showToast('Informe o valor recebido.'); return; }
+  const valorLiquido = taxaPercentual>0 ? valor - (valor*taxaPercentual/100) : valor;
+  state.vendas.push({id:uid(), receitaId, tipo, quantidade:qtd, comprador, data, valor, canal, formaPagamento, taxaPercentual, valorLiquido});
+  document.getElementById('vendaComprador').value='';
+  document.getElementById('vendaValor').value='';
+  document.getElementById('vendaQtd').value='';
+  document.getElementById('vendaTaxa').value='';
+  saveState().then(ok=>{
+    if(ok){ showToast('Venda registrada.'); renderVendasList(); }
+  });
+});
+
+function getVendasFiltradas(){
+  const comprador = document.getElementById('filtroComprador').value.trim().toLowerCase();
+  const de = document.getElementById('filtroDataDe').value;
+  const ate = document.getElementById('filtroDataAte').value;
+  const min = parseFloat(document.getElementById('filtroValorMin').value);
+  const max = parseFloat(document.getElementById('filtroValorMax').value);
+  const canal = document.getElementById('filtroCanal').value;
+  return state.vendas.filter(v=>{
+    if(comprador && !v.comprador.toLowerCase().includes(comprador)) return false;
+    if(de && v.data < de) return false;
+    if(ate && v.data > ate) return false;
+    if(!isNaN(min) && v.valor < min) return false;
+    if(!isNaN(max) && v.valor > max) return false;
+    if(canal && v.canal!==canal) return false;
+    return true;
+  }).sort((a,b)=> b.data.localeCompare(a.data));
+}
+
+function renderVendasList(){
+  const el = document.getElementById('vendasList');
+  const vendas = getVendasFiltradas();
+  if(vendas.length===0){
+    el.innerHTML = `<div class="empty-state"><span class="drip-icon">🧾</span><strong>Nenhuma venda encontrada</strong><span>Registre uma venda ou ajuste os filtros.</span></div>`;
+    return;
+  }
+  el.innerHTML = vendas.map(v=>{
+    const receita = state.receitas.find(r=>r.id===v.receitaId);
+    const liquidoTxt = (v.valorLiquido!==undefined && Math.abs(v.valorLiquido-v.valor)>0.005) ? ` · líquido ${brl(v.valorLiquido)}` : '';
+    return `
+      <div class="venda-row">
+        <div class="venda-top"><span>${escapeHtml(v.comprador)}</span><span class="mono">${brl(v.valor)}</span></div>
+        <div class="venda-meta">${new Date(v.data+'T00:00:00').toLocaleDateString('pt-BR')} · ${receita?escapeHtml(receita.nome):'Receita removida'} · ${v.quantidade} ${v.tipo==='fatia'?'fatia(s)':'inteiro(s)'} · ${CANAL_LABEL[v.canal]||'Outro'} · ${PAGAMENTO_LABEL[v.formaPagamento]||''}${liquidoTxt}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+['filtroComprador','filtroDataDe','filtroDataAte','filtroValorMin','filtroValorMax','filtroCanal'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderVendasList);
+  document.getElementById(id).addEventListener('change', renderVendasList);
+});
+
+// ---------- CONSUMO PRÓPRIO ----------
+function renderConsumoReceitaSelect(){
+  const sel = document.getElementById('consumoReceita');
+  if(state.receitas.length===0){
+    sel.innerHTML = `<option value="">Cadastre uma receita primeiro</option>`;
+    return;
+  }
+  sel.innerHTML = state.receitas.map(r=>`<option value="${r.id}">${escapeHtml(r.nome)}</option>`).join('');
+}
+
+document.getElementById('btnRegistrarConsumo').addEventListener('click', ()=>{
+  const receitaId = document.getElementById('consumoReceita').value;
+  const tipo = document.getElementById('consumoTipo').value;
+  const qtd = parseFloat(document.getElementById('consumoQtd').value)||1;
+  const data = document.getElementById('consumoData').value || new Date().toISOString().slice(0,10);
+  if(!receitaId){ showToast('Escolha uma receita.'); return; }
+  state.consumos.push({id:uid(), receitaId, tipo, quantidade:qtd, data});
+  document.getElementById('consumoQtd').value='';
+  saveState().then(ok=>{
+    if(ok){ showToast('Consumo registrado.'); renderConsumosList(); }
+  });
+});
+
+function renderConsumosList(){
+  const el = document.getElementById('consumosList');
+  if(state.consumos.length===0){
+    el.innerHTML = `<div class="section-note">Nenhum consumo próprio registrado ainda.</div>`;
+    return;
+  }
+  const ordenados = [...state.consumos].sort((a,b)=>b.data.localeCompare(a.data)).slice(0,20);
+  el.innerHTML = ordenados.map(c=>{
+    const r = state.receitas.find(x=>x.id===c.receitaId);
+    return `
+      <div class="ingredient-item">
+        <span>${new Date(c.data+'T00:00:00').toLocaleDateString('pt-BR')} · ${r?escapeHtml(r.nome):'Receita removida'} · ${c.quantidade} ${c.tipo==='fatia'?'fatia(s)':'inteiro(s)'}</span>
+        <button class="btn-danger-ghost" onclick="removerConsumo('${c.id}')">remover</button>
+      </div>
+    `;
+  }).join('');
+}
+function removerConsumo(id){
+  state.consumos = state.consumos.filter(c=>c.id!==id);
+  saveState().then(()=>renderConsumosList());
+}
+
+// ---------- PAINEL ----------
+function renderPainel(){
+  const now = new Date();
+  const mesAtual = now.toISOString().slice(0,7);
+  const vendasMes = state.vendas.filter(v=>v.data.startsWith(mesAtual));
+  const faturamentoLiquido = vendasMes.reduce((s,v)=> s + (v.valorLiquido!==undefined?v.valorLiquido:v.valor), 0);
+
+  let lucroEstimado = 0;
+  vendasMes.forEach(v=>{
+    const r = state.receitas.find(x=>x.id===v.receitaId);
+    if(!r) return;
+    const custoTotal = custoTotalReceita(r);
+    const custoUnidade = v.tipo==='fatia' ? custoTotal/(r.rendimentoFatias||1) : custoTotal;
+    const recebido = v.valorLiquido!==undefined?v.valorLiquido:v.valor;
+    lucroEstimado += (recebido - custoUnidade*v.quantidade);
+  });
+
+  const consumosMes = state.consumos.filter(c=>c.data.startsWith(mesAtual));
+  let custoConsumoMes = 0;
+  consumosMes.forEach(c=>{
+    const r = state.receitas.find(x=>x.id===c.receitaId);
+    if(!r) return;
+    const custoTotal = custoTotalReceita(r);
+    const custoUnidade = c.tipo==='fatia' ? custoTotal/(r.rendimentoFatias||1) : custoTotal;
+    custoConsumoMes += custoUnidade*c.quantidade;
+  });
+  lucroEstimado -= custoConsumoMes;
+
+  document.getElementById('painelFaturamento').textContent = brl(faturamentoLiquido);
+  document.getElementById('painelLucro').textContent = brl(lucroEstimado);
+  document.getElementById('painelConsumoNote').textContent = consumosMes.length>0
+    ? `Consumo próprio este mês: ${consumosMes.reduce((s,c)=>s+c.quantidade,0)} unidade(s), custo de ${brl(custoConsumoMes)} já descontado do lucro acima.`
+    : 'Sem consumo próprio registrado este mês.';
+
+  const canaisEl = document.getElementById('painelCanais');
+  if(state.vendas.length===0){
+    canaisEl.innerHTML = `<div class="section-note">Sem vendas registradas ainda.</div>`;
+  }else{
+    const porCanal = {};
+    state.vendas.forEach(v=>{
+      const c = v.canal||'outro';
+      if(!porCanal[c]) porCanal[c] = {qtd:0, valor:0};
+      porCanal[c].qtd += v.quantidade;
+      porCanal[c].valor += (v.valorLiquido!==undefined?v.valorLiquido:v.valor);
+    });
+    canaisEl.innerHTML = Object.keys(porCanal).sort((a,b)=>porCanal[b].valor-porCanal[a].valor).map(c=>`
+      <div class="canal-row"><span>${CANAL_LABEL[c]||'Outro'}</span><span class="mono">${porCanal[c].qtd} un · ${brl(porCanal[c].valor)}</span></div>
+    `).join('');
+  }
+
+  const contagem = {};
+  state.vendas.forEach(v=>{ contagem[v.receitaId] = (contagem[v.receitaId]||0) + v.quantidade; });
+  const maisVendidaId = Object.keys(contagem).sort((a,b)=>contagem[b]-contagem[a])[0];
+  const maisVendida = state.receitas.find(r=>r.id===maisVendidaId);
+  document.getElementById('painelMaisVendida').textContent = maisVendida
+    ? `${maisVendida.nome} — ${contagem[maisVendidaId]} unidades vendidas ao todo`
+    : 'Sem vendas registradas ainda.';
+
+  const receitasComPreco = state.receitas.filter(r=>r.precoVendaFatia>0);
+  if(receitasComPreco.length===0){
+    document.getElementById('painelMargem').textContent = 'Cadastre receitas com preço de venda para ver a margem.';
+  }else{
+    let somaMargem = 0;
+    receitasComPreco.forEach(r=>{
+      const custoTotal = custoTotalReceita(r);
+      const custoFatia = custoTotal/(r.rendimentoFatias||1);
+      const margem = ((r.precoVendaFatia - custoFatia)/r.precoVendaFatia)*100;
+      somaMargem += margem;
+    });
+    const media = somaMargem/receitasComPreco.length;
+    document.getElementById('painelMargem').textContent = `Margem média de ${media.toFixed(0)}% sobre o preço de venda por fatia, considerando as receitas com preço cadastrado.`;
+  }
+}
+
+function renderAll(){
+  renderCustosList();
+  renderSelectIngredienteItem();
+  renderReceitasList();
+  renderPrecificacaoReceitas();
+  renderVendaReceitaSelect();
+  renderConsumoReceitaSelect();
+  renderVendasList();
+  renderConsumosList();
+  document.getElementById('vendaData').value = new Date().toISOString().slice(0,10);
+  document.getElementById('consumoData').value = new Date().toISOString().slice(0,10);
+  atualizarVisibilidadeTaxa();
+}
+
+loadState();
+</script>
 </body>
 </html>
