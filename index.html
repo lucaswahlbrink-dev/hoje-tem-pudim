@@ -107,6 +107,7 @@
   .extracted-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);}
   .extracted-row input, .extracted-row select{margin-bottom:0;}
   .extracted-row .ex-nome{flex:1 1 100%;}
+  .extracted-row .ex-vincular{flex:1 1 100%;}
   .extracted-row .tipo{flex:1;min-width:110px;}
   .extracted-row .qtd{width:64px;flex:none;}
   .extracted-row .valor{width:74px;flex:none;}
@@ -812,6 +813,29 @@ async function lerNotaComIA(base64, mediaType){
   }
 }
 
+function normalizarNome(s){
+  return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+}
+
+function sugerirItemExistente(nome, arr){
+  const alvo = normalizarNome(nome);
+  if(!alvo) return null;
+  let m = arr.find(i=>normalizarNome(i.nome)===alvo);
+  if(m) return m;
+  m = arr.find(i=>{
+    const n = normalizarNome(i.nome);
+    return n.length>3 && (alvo.includes(n) || n.includes(alvo));
+  });
+  return m || null;
+}
+
+function renderVincularSelect(row, tipo, sugestaoId){
+  const arr = TIPO_CONFIG[tipo].arr();
+  const sel = row.querySelector('.ex-vincular');
+  sel.innerHTML = `<option value="">+ Criar novo item</option>` +
+    arr.map(i=>`<option value="${i.id}" ${i.id===sugestaoId?'selected':''}>Juntar com "${escapeHtml(i.nome)}" (${brl(i.precoUnitario)}/un)</option>`).join('');
+}
+
 function renderExtractedItems(){
   const area = document.getElementById('photoArea');
   const imgHtml = area.querySelector('img') ? area.querySelector('img').outerHTML : '';
@@ -819,7 +843,7 @@ function renderExtractedItems(){
     area.innerHTML = imgHtml + `<div class="section-note">Nenhum item identificado. Adicione manualmente na base de itens.</div>`;
     return;
   }
-  let html = `<div class="card" style="margin-top:10px;"><h2>Confira antes de salvar</h2><p class="section-note">Ajuste nome, tipo, quantidade ou valor se a leitura não ficou perfeita.</p>`;
+  let html = `<div class="card" style="margin-top:10px;"><h2>Confira antes de salvar</h2><p class="section-note">Ajuste nome, tipo e valores. Em "Vincular", confirme se é um item que você já tem ou um item novo.</p>`;
   extractedItems.forEach(item=>{
     html += `
       <div class="extracted-row" data-id="${item.id}">
@@ -830,10 +854,24 @@ function renderExtractedItems(){
         </select>
         <input type="number" value="${item.quantidade}" class="ex-qtd qtd mono" placeholder="Qtd">
         <input type="number" value="${item.valor}" class="ex-valor valor mono" placeholder="R$">
+        <select class="ex-vincular"></select>
       </div>`;
   });
-  html += `<button class="btn-primary" id="btnConfirmarExtracao" style="margin-top:12px;">Confirmar e salvar na base de custos</button></div>`;
+  html += `<button class="btn-primary" id="btnConfirmarExtracao" style="margin-top:12px;">Confirmar e salvar</button></div>`;
   area.innerHTML = imgHtml + html;
+
+  document.querySelectorAll('.extracted-row').forEach((row, idx)=>{
+    const item = extractedItems[idx];
+    const tipoInicial = row.querySelector('.ex-tipo').value;
+    const sugestao = sugerirItemExistente(item.nome, TIPO_CONFIG[tipoInicial].arr());
+    renderVincularSelect(row, tipoInicial, sugestao ? sugestao.id : null);
+    row.querySelector('.ex-tipo').addEventListener('change', ()=>{
+      const novoTipo = row.querySelector('.ex-tipo').value;
+      const nomeAtual = row.querySelector('.ex-nome').value;
+      const nova = sugerirItemExistente(nomeAtual, TIPO_CONFIG[novoTipo].arr());
+      renderVincularSelect(row, novoTipo, nova ? nova.id : null);
+    });
+  });
 
   document.getElementById('btnConfirmarExtracao').addEventListener('click', ()=>{
     document.querySelectorAll('.extracted-row').forEach(row=>{
@@ -841,11 +879,12 @@ function renderExtractedItems(){
       const tipo = row.querySelector('.ex-tipo').value;
       const qtd = parseFloat(row.querySelector('.ex-qtd').value)||1;
       const valor = parseFloat(row.querySelector('.ex-valor').value)||0;
+      const vinculoId = row.querySelector('.ex-vincular').value;
       if(!nome) return;
       const custoUnitario = qtd>0 ? valor/qtd : valor;
       const agora = new Date().toISOString();
-      const arr = tipo==='embalagem' ? state.embalagens : state.custosItens;
-      const existente = arr.find(i=>i.nome.toLowerCase()===nome.toLowerCase());
+      const arr = TIPO_CONFIG[tipo].arr();
+      const existente = vinculoId ? arr.find(i=>i.id===vinculoId) : null;
       if(existente){
         existente.precoUnitario = custoUnitario;
         existente.estoqueAtual = (existente.estoqueAtual||0) + qtd;
