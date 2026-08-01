@@ -185,6 +185,31 @@
     border-radius:999px;
     margin-left:4px;
   }
+
+  .emb-check-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:9px 0;
+    border-bottom:1px solid var(--border);
+    gap:10px;
+  }
+  .emb-check-row:last-child{border-bottom:none;}
+  .emb-check-label{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:14px;
+    flex:1;
+  }
+  .emb-check-label input[type="checkbox"]{
+    width:18px;
+    height:18px;
+    accent-color:var(--sugar);
+    margin:0;
+    flex:none;
+  }
+  .emb-qtd{ margin-bottom:0 !important; }
 </style>
 </head>
 <body>
@@ -217,40 +242,29 @@
   <section class="tab-panel active" id="tab-compras">
     <div class="card">
       <h2>Fotografar nota de compra</h2>
-      <p class="section-note">Tire a foto, a IA identifica os itens e valores. Você confere, ajusta o tipo se precisar, e só então salva na base de custos.</p>
+      <p class="section-note">Tire a foto, a IA identifica os itens e valores. Você confere, escolhe se é ingrediente ou embalagem, e só então salva.</p>
       <input type="file" accept="image/*" capture="environment" id="photoInput" style="display:none">
       <button class="btn-primary" id="btnTakePhoto">Tirar foto da nota</button>
       <div id="photoArea"></div>
     </div>
 
     <div class="card">
-      <h2>Itens de Custo</h2>
-      <p class="section-note">Ingredientes e embalagens: base atual e histórico de preços.</p>
+      <h2>Ingredientes</h2>
+      <p class="section-note">Base atual, estoque e histórico de preços dos ingredientes.</p>
       <div class="sheet-tabs">
-        <button class="sheet-tab active" data-sheet="base">📋 Base</button>
-        <button class="sheet-tab" data-sheet="estoque">📦 Estoque</button>
-        <button class="sheet-tab" data-sheet="historico">📈 Histórico</button>
+        <button class="sheet-tab active" data-sheet="base" data-tipo="ingrediente">📋 Base</button>
+        <button class="sheet-tab" data-sheet="estoque" data-tipo="ingrediente">📦 Estoque</button>
+        <button class="sheet-tab" data-sheet="historico" data-tipo="ingrediente">📈 Histórico</button>
       </div>
 
-      <div class="sheet-panel active" id="sheetBase">
+      <div class="sheet-panel active" id="sheetBase-ingrediente">
         <div id="custosList"></div>
-        <button class="btn-ghost btn-small" id="btnAddItemManual" style="margin-top:8px;">+ Adicionar item manualmente</button>
+        <button class="btn-ghost btn-small" id="btnAddItemManual" style="margin-top:8px;">+ Adicionar ingrediente manualmente</button>
         <div id="manualItemForm" class="hidden" style="margin-top:12px;">
           <label>Nome do item</label>
           <input type="text" id="manualNome" placeholder="Ex: Leite condensado">
-          <div class="row">
-            <div>
-              <label>Tipo</label>
-              <select id="manualTipo">
-                <option value="ingrediente">Ingrediente</option>
-                <option value="embalagem">Embalagem</option>
-              </select>
-            </div>
-            <div>
-              <label>Preço unitário (R$)</label>
-              <input type="number" id="manualPreco" class="mono" placeholder="0,00">
-            </div>
-          </div>
+          <label>Preço unitário (R$)</label>
+          <input type="number" id="manualPreco" class="mono" placeholder="0,00">
           <label>Estoque inicial</label>
           <input type="number" id="manualEstoque" placeholder="0">
           <div class="row">
@@ -260,12 +274,12 @@
         </div>
       </div>
 
-      <div class="sheet-panel" id="sheetEstoque">
+      <div class="sheet-panel" id="sheetEstoque-ingrediente">
         <p class="section-note">Ordenado do menor para o maior estoque. O mínimo é calculado sozinho: é a menor quantidade usada entre as receitas que levam esse item, o suficiente para pelo menos 1 pudim.</p>
         <div id="estoqueLista"></div>
       </div>
 
-      <div class="sheet-panel" id="sheetHistorico">
+      <div class="sheet-panel" id="sheetHistorico-ingrediente">
         <div id="historicoLista"></div>
         <div id="historicoChartView" class="hidden">
           <button class="btn-ghost btn-small" id="btnVoltarHistorico" style="margin-bottom:12px;">← Voltar à lista</button>
@@ -276,25 +290,82 @@
         </div>
       </div>
     </div>
+
+    <div class="card">
+      <h2>🎁 Embalagens</h2>
+      <p class="section-note">Separadas dos ingredientes de propósito, porque o uso varia por venda, não por receita.</p>
+      <div class="sheet-tabs">
+        <button class="sheet-tab active" data-sheet="base" data-tipo="embalagem">📋 Base</button>
+        <button class="sheet-tab" data-sheet="estoque" data-tipo="embalagem">📦 Estoque</button>
+        <button class="sheet-tab" data-sheet="historico" data-tipo="embalagem">📈 Histórico</button>
+      </div>
+
+      <div class="sheet-panel active" id="sheetBase-embalagem">
+        <div id="embalagensList"></div>
+        <button class="btn-ghost btn-small" id="btnAddEmbalagemManual" style="margin-top:8px;">+ Adicionar embalagem manualmente</button>
+        <div id="manualEmbalagemForm" class="hidden" style="margin-top:12px;">
+          <label>Nome da embalagem</label>
+          <input type="text" id="manualEmbNome" placeholder="Ex: Pote 200ml">
+          <label>Preço unitário (R$)</label>
+          <input type="number" id="manualEmbPreco" class="mono" placeholder="0,00">
+          <label>Estoque inicial</label>
+          <input type="number" id="manualEmbEstoque" placeholder="0">
+          <div class="row">
+            <button class="btn-primary" id="btnSalvarEmbalagemManual">Salvar embalagem</button>
+            <button class="btn-ghost" id="btnCancelarEmbalagemManual">Cancelar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet-panel" id="sheetEstoque-embalagem">
+        <p class="section-note">Ordenado do menor para o maior estoque.</p>
+        <div id="embalagensEstoqueLista"></div>
+      </div>
+
+      <div class="sheet-panel" id="sheetHistorico-embalagem">
+        <div id="embalagensHistoricoLista"></div>
+        <div id="embalagensHistoricoChartView" class="hidden">
+          <button class="btn-ghost btn-small" id="btnVoltarHistoricoEmbalagem" style="margin-bottom:12px;">← Voltar à lista</button>
+          <h3 id="embalagensHistoricoItemNome" style="font-family:'Fraunces',serif;color:var(--caramel-deep);margin:0 0 12px 0;font-size:16px;"></h3>
+          <canvas id="embalagensHistoricoChart" height="180"></canvas>
+          <div class="divider-label">Registros</div>
+          <div id="embalagensHistoricoDetalhes"></div>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- ABA RECEITAS -->
   <section class="tab-panel" id="tab-receitas">
+    <div class="card">
+      <h2>⚡ Configuração do forno</h2>
+      <p class="section-note">Usado para calcular o custo de energia automaticamente em todas as receitas. Ajuste aqui só se trocar de forno ou se o valor do kWh mudar na conta de luz.</p>
+      <div class="row">
+        <div>
+          <label>Potência do forno (W)</label>
+          <input type="number" id="configPotencia" class="mono" placeholder="1800">
+        </div>
+        <div>
+          <label>Valor do kWh (R$)</label>
+          <input type="number" id="configKwh" class="mono" step="0.0001" placeholder="1,2006">
+        </div>
+      </div>
+    </div>
     <div class="card">
       <h2>Nova receita</h2>
       <label>Nome da receita</label>
       <input type="text" id="novaReceitaNome" placeholder="Ex: Pudim de leite condensado">
       <label>Rendimento (fatias por pudim inteiro)</label>
       <input type="number" id="novaReceitaFatias" placeholder="Ex: 10">
-      <label>Custo fixo por fornada (R$)</label>
-      <input type="number" id="novaReceitaCustoFixo" class="mono" placeholder="Ex: energia elétrica do forno">
-      <p class="section-note" style="margin-top:-8px;">Calcule: potência do forno em kW × horas de uso ÷ 1000 × valor do kWh da sua conta de luz.</p>
+      <label>Horas de forno para esta receita</label>
+      <input type="number" id="novaReceitaHoras" class="mono" step="0.1" placeholder="Ex: 2">
+      <p class="section-note" style="margin-top:-8px;" id="novaReceitaCustoPreview">O custo de energia é calculado sozinho a partir da configuração do forno acima.</p>
       <div id="novaReceitaIngredientes"></div>
       <div class="row" style="margin-bottom:10px;">
         <select id="selectIngredienteItem"></select>
         <input type="number" id="inputIngredienteQtd" placeholder="Qtd" class="mono">
       </div>
-      <button class="btn-ghost btn-small" id="btnAddIngrediente" style="margin-bottom:10px;">+ Adicionar ingrediente ou embalagem</button>
+      <button class="btn-ghost btn-small" id="btnAddIngrediente" style="margin-bottom:10px;">+ Adicionar ingrediente</button>
       <button class="btn-primary" id="btnSalvarReceita">Salvar receita</button>
     </div>
     <div class="card">
@@ -311,14 +382,17 @@
     </div>
     <div class="card" id="precificacaoResultadoCard" style="display:none;">
       <h2 id="precifTitulo">Precificação</h2>
-      <div class="summary-line"><span>Custo dos ingredientes e embalagens</span><span class="mono" id="precifCustoIngredientes">R$ 0,00</span></div>
+      <div class="summary-line"><span>Custo dos ingredientes</span><span class="mono" id="precifCustoIngredientes">R$ 0,00</span></div>
+      <div class="divider-label">🎁 Embalagens padrão desta receita</div>
+      <div id="precifEmbalagensLista"></div>
+      <div class="summary-line"><span>Custo de embalagem</span><span class="mono" id="precifCustoEmbalagem">R$ 0,00</span></div>
       <div class="summary-line"><span>Custo fixo (energia etc)</span><span class="mono" id="precifCustoFixo">R$ 0,00</span></div>
       <div class="summary-line total"><span>Custo total do pudim</span><span class="mono" id="precifCustoTotal">R$ 0,00</span></div>
       <label style="margin-top:12px;">Preço de venda — fatia</label>
       <input type="number" id="precoVendaFatia" class="mono" placeholder="0,00">
       <label>Preço de venda — pudim inteiro</label>
       <input type="number" id="precoVendaInteiro" class="mono" placeholder="0,00">
-      <button class="btn-secondary" id="btnSalvarPrecos" style="margin-bottom:14px;">Salvar preços de venda</button>
+      <button class="btn-secondary" id="btnSalvarPrecos" style="margin-bottom:14px;">Salvar precificação</button>
       <div class="result-grid">
         <div class="result-box"><div class="label">Custo / fatia</div><div class="value mono" id="resCustoFatia">R$ 0,00</div></div>
         <div class="result-box profit"><div class="label">Lucro / fatia</div><div class="value mono" id="resLucroFatia">R$ 0,00</div></div>
@@ -347,6 +421,8 @@
           <input type="number" id="vendaQtd" placeholder="1">
         </div>
       </div>
+      <div class="divider-label">🎁 Embalagens usadas nesta venda</div>
+      <div id="vendaEmbalagensLista"></div>
       <label>Comprador</label>
       <input type="text" id="vendaComprador" placeholder="Nome do comprador">
       <label>Data</label>
@@ -522,7 +598,7 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 
-let state = { custosItens: [], receitas: [], vendas: [], consumos: [] };
+let state = { custosItens: [], embalagens: [], receitas: [], vendas: [], consumos: [], config: { potenciaForno: 1800, valorKwh: 1.2006 } };
 let novaReceitaIngredientesTemp = [];
 let receitaSelecionadaId = null;
 let currentPhotoBase64 = null;
@@ -541,14 +617,12 @@ function showToast(msg){
   setTimeout(()=>t.classList.remove('show'), 2200);
 }
 
-function custoTotalReceita(r){
-  let total = 0;
-  r.ingredientes.forEach(ing=>{
-    const item = state.custosItens.find(i=>i.id===ing.itemId);
-    if(item) total += item.precoUnitario*ing.quantidade;
-  });
-  total += (r.custoFixoPorFornada||0);
-  return total;
+function custoFixoReceita(r){
+  if(r.horasForno!==undefined && r.horasForno!==null && r.horasForno!==''){
+    const potenciaKw = (state.config.potenciaForno||1800)/1000;
+    return r.horasForno * potenciaKw * (state.config.valorKwh||0);
+  }
+  return r.custoFixoPorFornada||0; // compatibilidade com receitas antigas
 }
 function custoItensReceita(r){
   let total = 0;
@@ -558,6 +632,75 @@ function custoItensReceita(r){
   });
   return total;
 }
+function custoEmbalagensSelecionadas(lista){
+  let total = 0;
+  (lista||[]).forEach(sel=>{
+    const emb = state.embalagens.find(e=>e.id===sel.itemId);
+    if(emb) total += emb.precoUnitario * sel.quantidade;
+  });
+  return total;
+}
+function custoEmbalagemReceita(r){
+  return custoEmbalagensSelecionadas(r.embalagemPadrao||[]);
+}
+function custoBaseReceita(r){
+  // ingredientes + energia, sem embalagem (embalagem varia por venda)
+  return custoItensReceita(r) + custoFixoReceita(r);
+}
+function custoTotalReceita(r){
+  // usado na Precificação e nos gráficos por receita: inclui a embalagem padrão marcada
+  return custoBaseReceita(r) + custoEmbalagemReceita(r);
+}
+
+// ---------- CHECKLIST DE EMBALAGENS (reutilizado na Precificação e nas Vendas) ----------
+function embalagemArrayToMap(arr){
+  const map = {};
+  (arr||[]).forEach(e=> map[e.itemId] = e.quantidade);
+  return map;
+}
+
+function renderEmbalagemChecklist(containerId, mapaSelecionado, onChange){
+  const el = document.getElementById(containerId);
+  if(state.embalagens.length===0){
+    el.innerHTML = `<div class="section-note">Nenhuma embalagem cadastrada ainda. Cadastre em Compras → 🎁 Embalagens.</div>`;
+    return;
+  }
+  el.innerHTML = state.embalagens.map(emb=>{
+    const marcado = mapaSelecionado.hasOwnProperty(emb.id);
+    const qtd = marcado ? mapaSelecionado[emb.id] : 1;
+    return `
+    <div class="emb-check-row">
+      <label class="emb-check-label">
+        <input type="checkbox" class="emb-check" data-id="${emb.id}" ${marcado?'checked':''}>
+        <span>${escapeHtml(emb.nome)} <span class="item-sub">(${brl(emb.precoUnitario)}/un)</span></span>
+      </label>
+      <input type="number" class="emb-qtd mono ${marcado?'':'hidden'}" data-id="${emb.id}" value="${qtd}" min="1" style="width:64px;">
+    </div>`;
+  }).join('');
+  el.querySelectorAll('.emb-check').forEach(chk=>{
+    chk.addEventListener('change', ()=>{
+      const qtdInput = el.querySelector(`.emb-qtd[data-id="${chk.dataset.id}"]`);
+      qtdInput.classList.toggle('hidden', !chk.checked);
+      if(onChange) onChange();
+    });
+  });
+  el.querySelectorAll('.emb-qtd').forEach(inp=>{
+    inp.addEventListener('input', ()=>{ if(onChange) onChange(); });
+  });
+}
+
+function lerEmbalagemChecklist(containerId){
+  const el = document.getElementById(containerId);
+  const resultado = [];
+  el.querySelectorAll('.emb-check').forEach(chk=>{
+    if(chk.checked){
+      const qtdInput = el.querySelector(`.emb-qtd[data-id="${chk.dataset.id}"]`);
+      const qtd = parseFloat(qtdInput.value)||1;
+      resultado.push({itemId: chk.dataset.id, quantidade: qtd});
+    }
+  });
+  return resultado;
+}
 
 async function loadState(){
   try{
@@ -566,13 +709,32 @@ async function loadState(){
       const data = docSnap.data();
       if(data && data.json){
         const parsed = JSON.parse(data.json);
-        state = Object.assign({custosItens:[],receitas:[],vendas:[],consumos:[]}, parsed);
+        state = Object.assign({custosItens:[],embalagens:[],receitas:[],vendas:[],consumos:[],config:{potenciaForno:1800,valorKwh:1.2006}}, parsed);
+        if(!state.config) state.config = {potenciaForno:1800, valorKwh:1.2006};
+        if(!state.embalagens) state.embalagens = [];
+        migrarEmbalagensAntigas();
       }
     }
   }catch(e){
     console.log('Sem dados salvos ainda, iniciando vazio.', e);
   }
   renderAll();
+}
+
+function migrarEmbalagensAntigas(){
+  // move itens marcados como "embalagem" que ainda estejam dentro de custosItens (versões antigas do app)
+  const antigos = state.custosItens.filter(i=>i.tipo==='embalagem');
+  if(antigos.length>0){
+    antigos.forEach(item=>{
+      if(!state.embalagens.find(e=>e.id===item.id)) state.embalagens.push(item);
+    });
+    state.custosItens = state.custosItens.filter(i=>i.tipo!=='embalagem');
+  }
+  // remove qualquer referência a embalagem que tenha ficado dentro de ingredientes de receitas
+  const idsEmbalagem = new Set(state.embalagens.map(e=>e.id));
+  state.receitas.forEach(r=>{
+    r.ingredientes = r.ingredientes.filter(ing=>!idsEmbalagem.has(ing.itemId));
+  });
 }
 
 async function saveState(){
@@ -682,23 +844,24 @@ function renderExtractedItems(){
       if(!nome) return;
       const custoUnitario = qtd>0 ? valor/qtd : valor;
       const agora = new Date().toISOString();
-      const existente = state.custosItens.find(i=>i.nome.toLowerCase()===nome.toLowerCase());
+      const arr = tipo==='embalagem' ? state.embalagens : state.custosItens;
+      const existente = arr.find(i=>i.nome.toLowerCase()===nome.toLowerCase());
       if(existente){
         existente.precoUnitario = custoUnitario;
-        existente.tipo = tipo;
         existente.estoqueAtual = (existente.estoqueAtual||0) + qtd;
         existente.ultimaAtualizacao = agora;
         if(!existente.historico) existente.historico = [];
         existente.historico.push({data: agora, preco: custoUnitario});
       }else{
-        state.custosItens.push({id:uid(), nome, tipo, precoUnitario:custoUnitario, estoqueAtual:qtd, ultimaAtualizacao:agora, historico:[{data:agora, preco:custoUnitario}]});
+        arr.push({id:uid(), nome, precoUnitario:custoUnitario, estoqueAtual:qtd, ultimaAtualizacao:agora, historico:[{data:agora, preco:custoUnitario}]});
       }
     });
     saveState().then(ok=>{
       if(ok){
-        showToast('Itens salvos na base de custos.');
+        showToast('Itens salvos.');
         document.getElementById('photoArea').innerHTML='';
-        renderCustosList();
+        renderItensBase('ingrediente');
+        renderItensBase('embalagem');
         renderSelectIngredienteItem();
       }
     });
@@ -706,6 +869,19 @@ function renderExtractedItems(){
 }
 
 // ---------- COMPRAS: ITEM MANUAL ----------
+const TIPO_CONFIG = {
+  ingrediente: {
+    arr: ()=>state.custosItens, listId:'custosList', estoqueListId:'estoqueLista',
+    historicoListId:'historicoLista', chartViewId:'historicoChartView', chartId:'historicoChart',
+    detalhesId:'historicoDetalhes', nomeId:'historicoItemNome', emptyLabel:'ingrediente', emptyIcon:'🍮'
+  },
+  embalagem: {
+    arr: ()=>state.embalagens, listId:'embalagensList', estoqueListId:'embalagensEstoqueLista',
+    historicoListId:'embalagensHistoricoLista', chartViewId:'embalagensHistoricoChartView', chartId:'embalagensHistoricoChart',
+    detalhesId:'embalagensHistoricoDetalhes', nomeId:'embalagensHistoricoItemNome', emptyLabel:'embalagem', emptyIcon:'🎁'
+  }
+};
+
 document.getElementById('btnAddItemManual').addEventListener('click', ()=>{
   document.getElementById('manualItemForm').classList.remove('hidden');
 });
@@ -714,34 +890,55 @@ document.getElementById('btnCancelarManual').addEventListener('click', ()=>{
 });
 document.getElementById('btnSalvarManual').addEventListener('click', ()=>{
   const nome = document.getElementById('manualNome').value.trim();
-  const tipo = document.getElementById('manualTipo').value;
   const preco = parseFloat(document.getElementById('manualPreco').value)||0;
   const estoque = parseFloat(document.getElementById('manualEstoque').value)||0;
   if(!nome){ showToast('Dê um nome para o item.'); return; }
   const agora = new Date().toISOString();
-  state.custosItens.push({id:uid(), nome, tipo, precoUnitario:preco, estoqueAtual:estoque, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
+  state.custosItens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
   document.getElementById('manualNome').value='';
   document.getElementById('manualPreco').value='';
   document.getElementById('manualEstoque').value='';
   document.getElementById('manualItemForm').classList.add('hidden');
-  saveState().then(()=>{ renderCustosList(); renderSelectIngredienteItem(); showToast('Item adicionado.'); });
+  saveState().then(()=>{ renderItensBase('ingrediente'); renderSelectIngredienteItem(); showToast('Ingrediente adicionado.'); });
 });
 
-function renderCustosList(){
-  const el = document.getElementById('custosList');
-  if(state.custosItens.length===0){
-    el.innerHTML = `<div class="empty-state"><span class="drip-icon">🍮</span><strong>Nenhum item ainda</strong><span>Tire uma foto de uma nota ou adicione manualmente.</span></div>`;
+document.getElementById('btnAddEmbalagemManual').addEventListener('click', ()=>{
+  document.getElementById('manualEmbalagemForm').classList.remove('hidden');
+});
+document.getElementById('btnCancelarEmbalagemManual').addEventListener('click', ()=>{
+  document.getElementById('manualEmbalagemForm').classList.add('hidden');
+});
+document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()=>{
+  const nome = document.getElementById('manualEmbNome').value.trim();
+  const preco = parseFloat(document.getElementById('manualEmbPreco').value)||0;
+  const estoque = parseFloat(document.getElementById('manualEmbEstoque').value)||0;
+  if(!nome){ showToast('Dê um nome para a embalagem.'); return; }
+  const agora = new Date().toISOString();
+  state.embalagens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
+  document.getElementById('manualEmbNome').value='';
+  document.getElementById('manualEmbPreco').value='';
+  document.getElementById('manualEmbEstoque').value='';
+  document.getElementById('manualEmbalagemForm').classList.add('hidden');
+  saveState().then(()=>{ renderItensBase('embalagem'); showToast('Embalagem adicionada.'); });
+});
+
+function renderItensBase(tipo){
+  const cfg = TIPO_CONFIG[tipo];
+  const arr = cfg.arr();
+  const el = document.getElementById(cfg.listId);
+  if(arr.length===0){
+    el.innerHTML = `<div class="empty-state"><span class="drip-icon">${cfg.emptyIcon}</span><strong>Nenhum item ainda</strong><span>Cadastre um ${cfg.emptyLabel} para começar.</span></div>`;
     return;
   }
-  el.innerHTML = state.custosItens.map(item=>`
+  el.innerHTML = arr.map(item=>`
     <div class="item-row">
       <div>
-        <div class="item-name">${escapeHtml(item.nome)} <span class="pill ${item.tipo==='embalagem'?'embalagem':''}">${item.tipo==='embalagem'?'embalagem':'ingrediente'}</span></div>
+        <div class="item-name">${escapeHtml(item.nome)}</div>
         <div class="item-sub">Atualizado em ${new Date(item.ultimaAtualizacao).toLocaleDateString('pt-BR')}</div>
       </div>
       <div style="text-align:right;">
         <div class="mono item-name">${brl(item.precoUnitario)}</div>
-        <button class="btn-danger-ghost" onclick="removerItemCusto('${item.id}')">remover</button>
+        <button class="btn-danger-ghost" onclick="removerItem('${tipo}','${item.id}')">remover</button>
       </div>
     </div>
   `).join('');
@@ -758,62 +955,72 @@ function estoqueMinimoItem(itemId){
   return minimo;
 }
 
-function renderEstoqueLista(){
-  const el = document.getElementById('estoqueLista');
-  if(state.custosItens.length===0){
-    el.innerHTML = `<div class="empty-state"><span class="drip-icon">📦</span><strong>Nenhum item ainda</strong><span>Cadastre itens na aba Base para controlar o estoque.</span></div>`;
+function renderEstoqueLista(tipo){
+  const cfg = TIPO_CONFIG[tipo];
+  const arr = cfg.arr();
+  const el = document.getElementById(cfg.estoqueListId);
+  if(arr.length===0){
+    el.innerHTML = `<div class="empty-state"><span class="drip-icon">📦</span><strong>Nenhum item ainda</strong><span>Cadastre um ${cfg.emptyLabel} na aba Base.</span></div>`;
     return;
   }
-  const ordenado = [...state.custosItens].sort((a,b)=>(a.estoqueAtual||0)-(b.estoqueAtual||0));
+  const ordenado = [...arr].sort((a,b)=>(a.estoqueAtual||0)-(b.estoqueAtual||0));
   el.innerHTML = ordenado.map(item=>{
-    const minimo = estoqueMinimoItem(item.id);
+    const minimo = tipo==='ingrediente' ? estoqueMinimoItem(item.id) : null;
     const atual = item.estoqueAtual||0;
     const abaixoMinimo = minimo!==null && atual < minimo;
     return `
     <div class="item-row ${abaixoMinimo?'estoque-baixo':''}">
       <div>
-        <div class="item-name">${escapeHtml(item.nome)} <span class="pill ${item.tipo==='embalagem'?'embalagem':''}">${item.tipo==='embalagem'?'embalagem':'ingrediente'}</span>${abaixoMinimo?'<span class="pill-alerta">abaixo do mínimo</span>':''}</div>
-        <div class="item-sub">${minimo!==null ? 'Mínimo para 1 pudim: '+minimo : 'Ainda não usado em nenhuma receita'}</div>
+        <div class="item-name">${escapeHtml(item.nome)}${abaixoMinimo?'<span class="pill-alerta">abaixo do mínimo</span>':''}</div>
+        <div class="item-sub">${minimo!==null ? 'Mínimo para 1 pudim: '+minimo : (tipo==='ingrediente' ? 'Ainda não usado em nenhuma receita' : '')}</div>
       </div>
       <div style="text-align:right;">
         <div class="mono item-name" style="${abaixoMinimo?'color:#A64545;':''}">${atual}</div>
-        <button class="btn-danger-ghost" onclick="ajustarEstoque('${item.id}')">ajustar</button>
+        <button class="btn-danger-ghost" onclick="ajustarEstoque('${tipo}','${item.id}')">ajustar</button>
       </div>
     </div>
   `;}).join('');
 }
 
-function ajustarEstoque(id){
-  const item = state.custosItens.find(i=>i.id===id);
+function ajustarEstoque(tipo, id){
+  const arr = TIPO_CONFIG[tipo].arr();
+  const item = arr.find(i=>i.id===id);
   if(!item) return;
   const novo = prompt('Novo estoque atual de "'+item.nome+'":', item.estoqueAtual||0);
   if(novo===null) return;
   item.estoqueAtual = parseFloat(novo)||0;
-  saveState().then(()=>renderCustosList());
+  saveState().then(()=>renderEstoqueLista(tipo));
 }
 
-function removerItemCusto(id){
-  state.custosItens = state.custosItens.filter(i=>i.id!==id);
-  saveState().then(()=>{ renderCustosList(); renderSelectIngredienteItem(); });
+function removerItem(tipo, id){
+  if(tipo==='ingrediente'){
+    state.custosItens = state.custosItens.filter(i=>i.id!==id);
+  }else{
+    state.embalagens = state.embalagens.filter(i=>i.id!==id);
+  }
+  saveState().then(()=>{ renderItensBase(tipo); if(tipo==='ingrediente') renderSelectIngredienteItem(); });
 }
 
 // ---------- HISTÓRICO DE CUSTOS ----------
-let chartInstance = null;
+let chartInstances = { ingrediente:null, embalagem:null };
 
 document.querySelectorAll('.sheet-tab').forEach(tab=>{
   tab.addEventListener('click', ()=>{
-    document.querySelectorAll('.sheet-tab').forEach(t=>t.classList.remove('active'));
-    document.querySelectorAll('.sheet-panel').forEach(p=>p.classList.remove('active'));
+    const tipo = tab.dataset.tipo;
+    const grupo = tab.closest('.sheet-tabs');
+    grupo.querySelectorAll('.sheet-tab').forEach(t=>t.classList.remove('active'));
     tab.classList.add('active');
-    const paineis = {base:'sheetBase', estoque:'sheetEstoque', historico:'sheetHistorico'};
-    document.getElementById(paineis[tab.dataset.sheet]).classList.add('active');
+    const card = tab.closest('.card');
+    card.querySelectorAll('.sheet-panel').forEach(p=>p.classList.remove('active'));
+    const nomePainel = 'sheet' + tab.dataset.sheet.charAt(0).toUpperCase() + tab.dataset.sheet.slice(1) + '-' + tipo;
+    document.getElementById(nomePainel).classList.add('active');
     if(tab.dataset.sheet==='estoque'){
-      renderEstoqueLista();
+      renderEstoqueLista(tipo);
     }
     if(tab.dataset.sheet==='historico'){
-      document.getElementById('historicoChartView').classList.add('hidden');
-      document.getElementById('historicoLista').classList.remove('hidden');
-      renderHistoricoLista();
+      document.getElementById(TIPO_CONFIG[tipo].chartViewId).classList.add('hidden');
+      document.getElementById(TIPO_CONFIG[tipo].historicoListId).classList.remove('hidden');
+      renderHistoricoLista(tipo);
     }
   });
 });
@@ -822,19 +1029,25 @@ document.getElementById('btnVoltarHistorico').addEventListener('click', ()=>{
   document.getElementById('historicoChartView').classList.add('hidden');
   document.getElementById('historicoLista').classList.remove('hidden');
 });
+document.getElementById('btnVoltarHistoricoEmbalagem').addEventListener('click', ()=>{
+  document.getElementById('embalagensHistoricoChartView').classList.add('hidden');
+  document.getElementById('embalagensHistoricoLista').classList.remove('hidden');
+});
 
-function renderHistoricoLista(){
-  const el = document.getElementById('historicoLista');
-  if(state.custosItens.length===0){
-    el.innerHTML = `<div class="empty-state"><span class="drip-icon">📈</span><strong>Nenhum item ainda</strong><span>Cadastre itens na base de custos para ver o histórico.</span></div>`;
+function renderHistoricoLista(tipo){
+  const cfg = TIPO_CONFIG[tipo];
+  const arr = cfg.arr();
+  const el = document.getElementById(cfg.historicoListId);
+  if(arr.length===0){
+    el.innerHTML = `<div class="empty-state"><span class="drip-icon">📈</span><strong>Nenhum item ainda</strong><span>Cadastre um ${cfg.emptyLabel} para ver o histórico.</span></div>`;
     return;
   }
-  el.innerHTML = state.custosItens.map(item=>{
+  el.innerHTML = arr.map(item=>{
     const qtdRegistros = (item.historico||[]).length || 1;
     return `
-    <div class="item-row" style="cursor:pointer;" onclick="verGraficoItem('${item.id}')">
+    <div class="item-row" style="cursor:pointer;" onclick="verGraficoItem('${tipo}','${item.id}')">
       <div>
-        <div class="item-name">${escapeHtml(item.nome)} <span class="pill ${item.tipo==='embalagem'?'embalagem':''}">${item.tipo==='embalagem'?'embalagem':'ingrediente'}</span></div>
+        <div class="item-name">${escapeHtml(item.nome)}</div>
         <div class="item-sub">${qtdRegistros} registro(s) de preço</div>
       </div>
       <div class="mono item-name">${brl(item.precoUnitario)}</div>
@@ -842,21 +1055,22 @@ function renderHistoricoLista(){
   `;}).join('');
 }
 
-function verGraficoItem(itemId){
-  const item = state.custosItens.find(i=>i.id===itemId);
+function verGraficoItem(tipo, itemId){
+  const cfg = TIPO_CONFIG[tipo];
+  const item = cfg.arr().find(i=>i.id===itemId);
   if(!item) return;
-  document.getElementById('historicoLista').classList.add('hidden');
-  document.getElementById('historicoChartView').classList.remove('hidden');
-  document.getElementById('historicoItemNome').textContent = item.nome;
+  document.getElementById(cfg.historicoListId).classList.add('hidden');
+  document.getElementById(cfg.chartViewId).classList.remove('hidden');
+  document.getElementById(cfg.nomeId).textContent = item.nome;
 
   const historico = (item.historico && item.historico.length>0) ? item.historico : [{data:item.ultimaAtualizacao||new Date().toISOString(), preco:item.precoUnitario}];
   const ordenado = [...historico].sort((a,b)=> a.data.localeCompare(b.data));
   const labels = ordenado.map(h=> new Date(h.data).toLocaleDateString('pt-BR'));
   const valores = ordenado.map(h=> h.preco);
 
-  const ctx = document.getElementById('historicoChart').getContext('2d');
-  if(chartInstance) chartInstance.destroy();
-  chartInstance = new Chart(ctx, {
+  const ctx = document.getElementById(cfg.chartId).getContext('2d');
+  if(chartInstances[tipo]) chartInstances[tipo].destroy();
+  chartInstances[tipo] = new Chart(ctx, {
     type: 'line',
     data: {
       labels,
@@ -880,7 +1094,7 @@ function verGraficoItem(itemId){
     }
   });
 
-  const detailEl = document.getElementById('historicoDetalhes');
+  const detailEl = document.getElementById(cfg.detalhesId);
   detailEl.innerHTML = [...ordenado].reverse().map(h=>`
     <div class="summary-line"><span>${new Date(h.data).toLocaleDateString('pt-BR')}</span><span class="mono">${brl(h.preco)}</span></div>
   `).join('');
@@ -890,10 +1104,10 @@ function verGraficoItem(itemId){
 function renderSelectIngredienteItem(){
   const sel = document.getElementById('selectIngredienteItem');
   if(state.custosItens.length===0){
-    sel.innerHTML = `<option value="">Cadastre itens de custo primeiro</option>`;
+    sel.innerHTML = `<option value="">Cadastre ingredientes primeiro</option>`;
     return;
   }
-  sel.innerHTML = state.custosItens.map(i=>`<option value="${i.id}">${escapeHtml(i.nome)} (${i.tipo==='embalagem'?'embalagem':'ingrediente'})</option>`).join('');
+  sel.innerHTML = state.custosItens.map(i=>`<option value="${i.id}">${escapeHtml(i.nome)}</option>`).join('');
 }
 
 document.getElementById('btnAddIngrediente').addEventListener('click', ()=>{
@@ -901,7 +1115,7 @@ document.getElementById('btnAddIngrediente').addEventListener('click', ()=>{
   const qtd = parseFloat(document.getElementById('inputIngredienteQtd').value);
   if(!itemId || !qtd){ showToast('Escolha um item e uma quantidade.'); return; }
   const item = state.custosItens.find(i=>i.id===itemId);
-  novaReceitaIngredientesTemp.push({itemId, nome:item.nome, quantidade:qtd, tipo:item.tipo});
+  novaReceitaIngredientesTemp.push({itemId, nome:item.nome, quantidade:qtd});
   document.getElementById('inputIngredienteQtd').value='';
   renderNovaReceitaIngredientes();
 });
@@ -910,7 +1124,7 @@ function renderNovaReceitaIngredientes(){
   const el = document.getElementById('novaReceitaIngredientes');
   el.innerHTML = novaReceitaIngredientesTemp.map((ing,idx)=>`
     <div class="ingredient-item">
-      <span>${escapeHtml(ing.nome)} <span class="pill ${ing.tipo==='embalagem'?'embalagem':''}">${ing.tipo==='embalagem'?'embalagem':'ingrediente'}</span> — ${ing.quantidade}</span>
+      <span>${escapeHtml(ing.nome)} — ${ing.quantidade}</span>
       <button class="btn-danger-ghost" onclick="removerIngredienteTemp(${idx})">remover</button>
     </div>
   `).join('');
@@ -920,21 +1134,30 @@ function removerIngredienteTemp(idx){
   renderNovaReceitaIngredientes();
 }
 
+document.getElementById('novaReceitaHoras').addEventListener('input', ()=>{
+  const horas = parseFloat(document.getElementById('novaReceitaHoras').value)||0;
+  const potenciaKw = (state.config.potenciaForno||1800)/1000;
+  const custo = horas * potenciaKw * (state.config.valorKwh||0);
+  document.getElementById('novaReceitaCustoPreview').textContent = horas>0
+    ? `Custo de energia estimado: ${brl(custo)}`
+    : 'O custo de energia é calculado sozinho a partir da configuração do forno acima.';
+});
+
 document.getElementById('btnSalvarReceita').addEventListener('click', ()=>{
   const nome = document.getElementById('novaReceitaNome').value.trim();
   const fatias = parseInt(document.getElementById('novaReceitaFatias').value)||1;
-  const custoFixo = parseFloat(document.getElementById('novaReceitaCustoFixo').value)||0;
+  const horas = parseFloat(document.getElementById('novaReceitaHoras').value)||0;
   if(!nome){ showToast('Dê um nome para a receita.'); return; }
   if(novaReceitaIngredientesTemp.length===0){ showToast('Adicione pelo menos um ingrediente.'); return; }
   state.receitas.push({
-    id:uid(), nome, rendimentoFatias:fatias, custoFixoPorFornada:custoFixo,
+    id:uid(), nome, rendimentoFatias:fatias, horasForno:horas,
     ingredientes:[...novaReceitaIngredientesTemp],
     precoVendaFatia:0, precoVendaInteiro:0
   });
   novaReceitaIngredientesTemp = [];
   document.getElementById('novaReceitaNome').value='';
   document.getElementById('novaReceitaFatias').value='';
-  document.getElementById('novaReceitaCustoFixo').value='';
+  document.getElementById('novaReceitaHoras').value='';
   renderNovaReceitaIngredientes();
   saveState().then(ok=>{
     if(ok){ showToast('Receita salva.'); renderReceitasList(); renderPrecificacaoReceitas(); renderVendaReceitaSelect(); renderConsumoReceitaSelect(); }
@@ -950,7 +1173,7 @@ function renderReceitasList(){
   el.innerHTML = state.receitas.map(r=>`
     <div class="receita-card">
       <h3>${escapeHtml(r.nome)}</h3>
-      <p>${r.ingredientes.length} itens · rende ${r.rendimentoFatias} fatias · custo fixo ${brl(r.custoFixoPorFornada||0)}</p>
+      <p>${r.ingredientes.length} itens · rende ${r.rendimentoFatias} fatias · energia ${brl(custoFixoReceita(r))}</p>
       <button class="btn-danger-ghost" onclick="removerReceita('${r.id}')">excluir receita</button>
     </div>
   `).join('');
@@ -989,33 +1212,49 @@ function calcularPrecificacao(){
   card.style.display='block';
   document.getElementById('precifTitulo').textContent = 'Precificação — ' + r.nome;
 
-  const custoItens = custoItensReceita(r);
-  const custoFixo = r.custoFixoPorFornada||0;
-  const custoTotal = custoItens + custoFixo;
-
-  document.getElementById('precifCustoIngredientes').textContent = brl(custoItens);
-  document.getElementById('precifCustoFixo').textContent = brl(custoFixo);
-  document.getElementById('precifCustoTotal').textContent = brl(custoTotal);
+  renderEmbalagemChecklist('precifEmbalagensLista', embalagemArrayToMap(r.embalagemPadrao), atualizarTotaisPrecificacao);
   document.getElementById('precoVendaFatia').value = r.precoVendaFatia || '';
   document.getElementById('precoVendaInteiro').value = r.precoVendaInteiro || '';
 
+  atualizarTotaisPrecificacao();
+}
+
+function atualizarTotaisPrecificacao(){
+  const r = state.receitas.find(x=>x.id===receitaSelecionadaId);
+  if(!r) return;
+  const custoItens = custoItensReceita(r);
+  const selecionadas = lerEmbalagemChecklist('precifEmbalagensLista');
+  const custoEmbalagem = custoEmbalagensSelecionadas(selecionadas);
+  const custoFixo = custoFixoReceita(r);
+  const custoTotal = custoItens + custoEmbalagem + custoFixo;
+
+  document.getElementById('precifCustoIngredientes').textContent = brl(custoItens);
+  document.getElementById('precifCustoEmbalagem').textContent = brl(custoEmbalagem);
+  document.getElementById('precifCustoFixo').textContent = brl(custoFixo);
+  document.getElementById('precifCustoTotal').textContent = brl(custoTotal);
+
+  const precoVendaFatia = parseFloat(document.getElementById('precoVendaFatia').value)||0;
+  const precoVendaInteiro = parseFloat(document.getElementById('precoVendaInteiro').value)||0;
   const custoFatia = custoTotal / (r.rendimentoFatias||1);
-  const lucroFatia = (r.precoVendaFatia||0) - custoFatia;
-  const lucroInteiro = (r.precoVendaInteiro||0) - custoTotal;
+  const lucroFatia = precoVendaFatia - custoFatia;
+  const lucroInteiro = precoVendaInteiro - custoTotal;
 
   document.getElementById('resCustoFatia').textContent = brl(custoFatia);
   document.getElementById('resLucroFatia').textContent = brl(lucroFatia);
   document.getElementById('resCustoInteiro').textContent = brl(custoTotal);
   document.getElementById('resLucroInteiro').textContent = brl(lucroInteiro);
 }
+document.getElementById('precoVendaFatia').addEventListener('input', atualizarTotaisPrecificacao);
+document.getElementById('precoVendaInteiro').addEventListener('input', atualizarTotaisPrecificacao);
 
 document.getElementById('btnSalvarPrecos').addEventListener('click', ()=>{
   const r = state.receitas.find(x=>x.id===receitaSelecionadaId);
   if(!r) return;
   r.precoVendaFatia = parseFloat(document.getElementById('precoVendaFatia').value)||0;
   r.precoVendaInteiro = parseFloat(document.getElementById('precoVendaInteiro').value)||0;
+  r.embalagemPadrao = lerEmbalagemChecklist('precifEmbalagensLista');
   saveState().then(ok=>{
-    if(ok){ showToast('Preços salvos.'); calcularPrecificacao(); }
+    if(ok){ showToast('Precificação salva.'); calcularPrecificacao(); }
   });
 });
 
@@ -1027,6 +1266,7 @@ function renderVendaReceitaSelect(){
     return;
   }
   sel.innerHTML = state.receitas.map(r=>`<option value="${r.id}">${escapeHtml(r.nome)}</option>`).join('');
+  renderEmbalagemChecklist('vendaEmbalagensLista', {});
 }
 
 function atualizarVisibilidadeTaxa(){
@@ -1052,14 +1292,16 @@ document.getElementById('btnRegistrarVenda').addEventListener('click', ()=>{
   const formaPagamento = document.getElementById('vendaPagamento').value;
   const taxaPercentual = parseFloat(document.getElementById('vendaTaxa').value)||0;
   const valor = parseFloat(document.getElementById('vendaValor').value);
+  const embalagens = lerEmbalagemChecklist('vendaEmbalagensLista');
   if(!comprador){ showToast('Informe o nome do comprador.'); return; }
   if(!valor && valor!==0){ showToast('Informe o valor recebido.'); return; }
   const valorLiquido = taxaPercentual>0 ? valor - (valor*taxaPercentual/100) : valor;
-  state.vendas.push({id:uid(), receitaId, tipo, quantidade:qtd, comprador, data, valor, canal, formaPagamento, taxaPercentual, valorLiquido});
+  state.vendas.push({id:uid(), receitaId, tipo, quantidade:qtd, comprador, data, valor, canal, formaPagamento, taxaPercentual, valorLiquido, embalagens});
   document.getElementById('vendaComprador').value='';
   document.getElementById('vendaValor').value='';
   document.getElementById('vendaQtd').value='';
   document.getElementById('vendaTaxa').value='';
+  renderEmbalagemChecklist('vendaEmbalagensLista', {});
   saveState().then(ok=>{
     if(ok){ showToast('Venda registrada.'); renderVendasList(); }
   });
@@ -1093,10 +1335,13 @@ function renderVendasList(){
   el.innerHTML = vendas.map(v=>{
     const receita = state.receitas.find(r=>r.id===v.receitaId);
     const liquidoTxt = (v.valorLiquido!==undefined && Math.abs(v.valorLiquido-v.valor)>0.005) ? ` · líquido ${brl(v.valorLiquido)}` : '';
+    const embTxt = (v.embalagens && v.embalagens.length>0)
+      ? ' · ' + v.embalagens.map(e=>{ const emb = state.embalagens.find(x=>x.id===e.itemId); return emb ? `${emb.nome}${e.quantidade>1?' x'+e.quantidade:''}` : ''; }).filter(Boolean).join(', ')
+      : '';
     return `
       <div class="venda-row">
         <div class="venda-top"><span>${escapeHtml(v.comprador)}</span><span class="mono">${brl(v.valor)}</span></div>
-        <div class="venda-meta">${new Date(v.data+'T00:00:00').toLocaleDateString('pt-BR')} · ${receita?escapeHtml(receita.nome):'Receita removida'} · ${v.quantidade} ${v.tipo==='fatia'?'fatia(s)':'inteiro(s)'} · ${CANAL_LABEL[v.canal]||'Outro'} · ${PAGAMENTO_LABEL[v.formaPagamento]||''}${liquidoTxt}</div>
+        <div class="venda-meta">${new Date(v.data+'T00:00:00').toLocaleDateString('pt-BR')} · ${receita?escapeHtml(receita.nome):'Receita removida'} · ${v.quantidade} ${v.tipo==='fatia'?'fatia(s)':'inteiro(s)'} · ${CANAL_LABEL[v.canal]||'Outro'} · ${PAGAMENTO_LABEL[v.formaPagamento]||''}${liquidoTxt}${embTxt}</div>
       </div>
     `;
   }).join('');
@@ -1163,10 +1408,11 @@ function renderPainel(){
   vendasMes.forEach(v=>{
     const r = state.receitas.find(x=>x.id===v.receitaId);
     if(!r) return;
-    const custoTotal = custoTotalReceita(r);
-    const custoUnidade = v.tipo==='fatia' ? custoTotal/(r.rendimentoFatias||1) : custoTotal;
+    const custoBase = custoBaseReceita(r);
+    const custoUnidade = v.tipo==='fatia' ? custoBase/(r.rendimentoFatias||1) : custoBase;
+    const custoEmbalagemVenda = custoEmbalagensSelecionadas(v.embalagens);
     const recebido = v.valorLiquido!==undefined?v.valorLiquido:v.valor;
-    lucroEstimado += (recebido - custoUnidade*v.quantidade);
+    lucroEstimado += (recebido - custoUnidade*v.quantidade - custoEmbalagemVenda);
   });
 
   const consumosMes = state.consumos.filter(c=>c.data.startsWith(mesAtual));
@@ -1174,8 +1420,8 @@ function renderPainel(){
   consumosMes.forEach(c=>{
     const r = state.receitas.find(x=>x.id===c.receitaId);
     if(!r) return;
-    const custoTotal = custoTotalReceita(r);
-    const custoUnidade = c.tipo==='fatia' ? custoTotal/(r.rendimentoFatias||1) : custoTotal;
+    const custoBase = custoBaseReceita(r);
+    const custoUnidade = c.tipo==='fatia' ? custoBase/(r.rendimentoFatias||1) : custoBase;
     custoConsumoMes += custoUnidade*c.quantidade;
   });
   lucroEstimado -= custoConsumoMes;
@@ -1297,7 +1543,11 @@ function destruirChart(nome){
 }
 
 function renderAll(){
-  renderCustosList();
+  if(!state.config) state.config = { potenciaForno: 1800, valorKwh: 1.2006 };
+  document.getElementById('configPotencia').value = state.config.potenciaForno;
+  document.getElementById('configKwh').value = state.config.valorKwh;
+  renderItensBase('ingrediente');
+  renderItensBase('embalagem');
   renderSelectIngredienteItem();
   renderReceitasList();
   renderPrecificacaoReceitas();
@@ -1309,6 +1559,16 @@ function renderAll(){
   document.getElementById('consumoData').value = new Date().toISOString().slice(0,10);
   atualizarVisibilidadeTaxa();
 }
+
+function salvarConfigForno(){
+  state.config.potenciaForno = parseFloat(document.getElementById('configPotencia').value)||1800;
+  state.config.valorKwh = parseFloat(document.getElementById('configKwh').value)||0;
+  saveState().then(ok=>{
+    if(ok){ showToast('Configuração do forno salva.'); renderReceitasList(); calcularPrecificacao(); }
+  });
+}
+document.getElementById('configPotencia').addEventListener('change', salvarConfigForno);
+document.getElementById('configKwh').addEventListener('change', salvarConfigForno);
 
 auth.onAuthStateChanged(user=>{
   if(user){
