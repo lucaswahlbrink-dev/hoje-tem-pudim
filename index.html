@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Pudim | Gestão do Negócio</title>
+<title>Hoje Tem Pudim — Bastidores</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -125,13 +125,87 @@
   .canal-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
   .canal-row:last-child{border-bottom:none;}
   .hidden{display:none !important;}
+
+  #loginScreen{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+  }
+  .login-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:18px;
+    padding:28px 22px;
+    max-width:360px;
+    width:100%;
+    box-shadow:0 4px 16px rgba(90,52,25,0.08);
+  }
+
+  .sheet-tabs{
+    display:flex;
+    gap:2px;
+    border-bottom:2px solid var(--border);
+    margin-bottom:16px;
+  }
+  .sheet-tab{
+    background:var(--cream);
+    color:var(--muted);
+    border:1px solid var(--border);
+    border-bottom:none;
+    border-radius:8px 8px 0 0;
+    padding:8px 14px;
+    font-size:13px;
+    font-weight:600;
+    margin-bottom:-2px;
+  }
+  .sheet-tab.active{
+    background:var(--surface);
+    color:var(--caramel-deep);
+    border-bottom:2px solid var(--surface);
+  }
+  .sheet-panel{display:none;}
+  .sheet-panel.active{display:block;}
+
+  .item-row.estoque-baixo{
+    background:#FBEAEA;
+    border-radius:10px;
+    padding-left:8px;
+    padding-right:8px;
+    margin-bottom:2px;
+  }
+  .pill-alerta{
+    display:inline-block;
+    background:#F6DADA;
+    color:#A64545;
+    font-size:10px;
+    font-weight:700;
+    padding:2px 7px;
+    border-radius:999px;
+    margin-left:4px;
+  }
 </style>
 </head>
 <body>
 
+<div id="loginScreen">
+  <div class="login-card">
+    <h1 style="font-family:'Fraunces',serif;font-weight:700;font-size:26px;color:var(--caramel-deep);margin:0 0 4px 0;">Hoje Tem Pudim</h1>
+    <p class="section-note" style="margin-bottom:20px;">Bastidores — acesso restrito. Entre com o e-mail e senha da família.</p>
+    <label>E-mail</label>
+    <input type="email" id="loginEmail" placeholder="seu@email.com">
+    <label>Senha</label>
+    <input type="password" id="loginSenha" placeholder="Senha">
+    <button class="btn-primary" id="btnLogin">Entrar</button>
+    <div class="section-note" id="loginErro" style="color:#A64545;display:none;margin-top:10px;"></div>
+  </div>
+</div>
+
+<div id="appContent" class="hidden">
 <header class="app-header">
-  <h1>Pudim, ponto a ponto</h1>
-  <p>Compras, receitas, preço e venda — tudo num só lugar</p>
+  <h1>Hoje Tem Pudim</h1>
+  <p>Bastidores — compras, receitas, preço e venda</p>
   <svg class="drip" viewBox="0 0 400 16" preserveAspectRatio="none">
     <path d="M0,0 L400,0 L400,4 C380,4 375,14 360,14 C345,14 340,4 320,4 C300,4 295,15 278,15 C261,15 256,4 235,4 C214,4 209,13 190,13 C171,13 166,4 145,4 C124,4 119,14 100,14 C81,14 76,4 55,4 C34,4 29,10 0,8 Z" fill="#C97A3B" opacity="0.55"/>
   </svg>
@@ -150,31 +224,55 @@
     </div>
 
     <div class="card">
-      <h2>Base de itens de custo</h2>
-      <p class="section-note">Ingredientes e embalagens, com o preço mais recente pago e o estoque atual.</p>
-      <div id="custosList"></div>
-      <button class="btn-ghost btn-small" id="btnAddItemManual" style="margin-top:8px;">+ Adicionar item manualmente</button>
-      <div id="manualItemForm" class="hidden" style="margin-top:12px;">
-        <label>Nome do item</label>
-        <input type="text" id="manualNome" placeholder="Ex: Leite condensado">
-        <div class="row">
-          <div>
-            <label>Tipo</label>
-            <select id="manualTipo">
-              <option value="ingrediente">Ingrediente</option>
-              <option value="embalagem">Embalagem</option>
-            </select>
+      <h2>Itens de Custo</h2>
+      <p class="section-note">Ingredientes e embalagens: base atual e histórico de preços.</p>
+      <div class="sheet-tabs">
+        <button class="sheet-tab active" data-sheet="base">📋 Base</button>
+        <button class="sheet-tab" data-sheet="estoque">📦 Estoque</button>
+        <button class="sheet-tab" data-sheet="historico">📈 Histórico</button>
+      </div>
+
+      <div class="sheet-panel active" id="sheetBase">
+        <div id="custosList"></div>
+        <button class="btn-ghost btn-small" id="btnAddItemManual" style="margin-top:8px;">+ Adicionar item manualmente</button>
+        <div id="manualItemForm" class="hidden" style="margin-top:12px;">
+          <label>Nome do item</label>
+          <input type="text" id="manualNome" placeholder="Ex: Leite condensado">
+          <div class="row">
+            <div>
+              <label>Tipo</label>
+              <select id="manualTipo">
+                <option value="ingrediente">Ingrediente</option>
+                <option value="embalagem">Embalagem</option>
+              </select>
+            </div>
+            <div>
+              <label>Preço unitário (R$)</label>
+              <input type="number" id="manualPreco" class="mono" placeholder="0,00">
+            </div>
           </div>
-          <div>
-            <label>Preço unitário (R$)</label>
-            <input type="number" id="manualPreco" class="mono" placeholder="0,00">
+          <label>Estoque inicial</label>
+          <input type="number" id="manualEstoque" placeholder="0">
+          <div class="row">
+            <button class="btn-primary" id="btnSalvarManual">Salvar item</button>
+            <button class="btn-ghost" id="btnCancelarManual">Cancelar</button>
           </div>
         </div>
-        <label>Estoque inicial</label>
-        <input type="number" id="manualEstoque" placeholder="0">
-        <div class="row">
-          <button class="btn-primary" id="btnSalvarManual">Salvar item</button>
-          <button class="btn-ghost" id="btnCancelarManual">Cancelar</button>
+      </div>
+
+      <div class="sheet-panel" id="sheetEstoque">
+        <p class="section-note">Ordenado do menor para o maior estoque. O mínimo é calculado sozinho: é a menor quantidade usada entre as receitas que levam esse item, o suficiente para pelo menos 1 pudim.</p>
+        <div id="estoqueLista"></div>
+      </div>
+
+      <div class="sheet-panel" id="sheetHistorico">
+        <div id="historicoLista"></div>
+        <div id="historicoChartView" class="hidden">
+          <button class="btn-ghost btn-small" id="btnVoltarHistorico" style="margin-bottom:12px;">← Voltar à lista</button>
+          <h3 id="historicoItemNome" style="font-family:'Fraunces',serif;color:var(--caramel-deep);margin:0 0 12px 0;font-size:16px;"></h3>
+          <canvas id="historicoChart" height="180"></canvas>
+          <div class="divider-label">Registros</div>
+          <div id="historicoDetalhes"></div>
         </div>
       </div>
     </div>
@@ -358,16 +456,24 @@
       <div class="section-note" id="painelConsumoNote" style="margin-top:10px;">Sem consumo próprio registrado este mês.</div>
     </div>
     <div class="card">
+      <h2>Faturamento por dia</h2>
+      <canvas id="chartFaturamentoDia" height="180"></canvas>
+      <div class="section-note" id="painelFaturamentoDiaNote" style="margin-top:10px;">Sem vendas registradas ainda.</div>
+    </div>
+    <div class="card">
       <h2>Vendas por canal</h2>
-      <div id="painelCanais"></div>
+      <canvas id="chartCanais" height="180"></canvas>
+      <div class="section-note" id="painelCanaisNote" style="margin-top:10px;">Sem vendas registradas ainda.</div>
     </div>
     <div class="card">
-      <h2>Receita mais vendida</h2>
-      <div id="painelMaisVendida" class="section-note" style="margin-top:0;">Sem vendas registradas ainda.</div>
+      <h2>Desempenho por receita</h2>
+      <canvas id="chartReceitas" height="180"></canvas>
+      <div class="section-note" id="painelMaisVendida" style="margin-top:10px;">Sem vendas registradas ainda.</div>
     </div>
     <div class="card">
-      <h2>Margem média</h2>
-      <div class="section-note" style="margin-top:0;" id="painelMargem">Cadastre receitas com preço de venda para ver a margem.</div>
+      <h2>Margem por receita</h2>
+      <canvas id="chartMargem" height="180"></canvas>
+      <div class="section-note" id="painelMargem" style="margin-top:10px;">Cadastre receitas com preço de venda para ver a margem.</div>
     </div>
   </section>
 
@@ -397,9 +503,12 @@
     Painel
   </button>
 </nav>
+</div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <script>
 const firebaseConfig = {
   apiKey: "AIzaSyBE3Q02gvLQFiwIuIlzqab9EELv7cS07Ak",
@@ -411,6 +520,7 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const auth = firebase.auth();
 
 let state = { custosItens: [], receitas: [], vendas: [], consumos: [] };
 let novaReceitaIngredientesTemp = [];
@@ -571,14 +681,17 @@ function renderExtractedItems(){
       const valor = parseFloat(row.querySelector('.ex-valor').value)||0;
       if(!nome) return;
       const custoUnitario = qtd>0 ? valor/qtd : valor;
+      const agora = new Date().toISOString();
       const existente = state.custosItens.find(i=>i.nome.toLowerCase()===nome.toLowerCase());
       if(existente){
         existente.precoUnitario = custoUnitario;
         existente.tipo = tipo;
         existente.estoqueAtual = (existente.estoqueAtual||0) + qtd;
-        existente.ultimaAtualizacao = new Date().toISOString();
+        existente.ultimaAtualizacao = agora;
+        if(!existente.historico) existente.historico = [];
+        existente.historico.push({data: agora, preco: custoUnitario});
       }else{
-        state.custosItens.push({id:uid(), nome, tipo, precoUnitario:custoUnitario, estoqueAtual:qtd, ultimaAtualizacao:new Date().toISOString()});
+        state.custosItens.push({id:uid(), nome, tipo, precoUnitario:custoUnitario, estoqueAtual:qtd, ultimaAtualizacao:agora, historico:[{data:agora, preco:custoUnitario}]});
       }
     });
     saveState().then(ok=>{
@@ -605,7 +718,8 @@ document.getElementById('btnSalvarManual').addEventListener('click', ()=>{
   const preco = parseFloat(document.getElementById('manualPreco').value)||0;
   const estoque = parseFloat(document.getElementById('manualEstoque').value)||0;
   if(!nome){ showToast('Dê um nome para o item.'); return; }
-  state.custosItens.push({id:uid(), nome, tipo, precoUnitario:preco, estoqueAtual:estoque, ultimaAtualizacao:new Date().toISOString()});
+  const agora = new Date().toISOString();
+  state.custosItens.push({id:uid(), nome, tipo, precoUnitario:preco, estoqueAtual:estoque, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
   document.getElementById('manualNome').value='';
   document.getElementById('manualPreco').value='';
   document.getElementById('manualEstoque').value='';
@@ -623,15 +737,50 @@ function renderCustosList(){
     <div class="item-row">
       <div>
         <div class="item-name">${escapeHtml(item.nome)} <span class="pill ${item.tipo==='embalagem'?'embalagem':''}">${item.tipo==='embalagem'?'embalagem':'ingrediente'}</span></div>
-        <div class="item-sub">Estoque: ${item.estoqueAtual??0} · atualizado em ${new Date(item.ultimaAtualizacao).toLocaleDateString('pt-BR')}</div>
+        <div class="item-sub">Atualizado em ${new Date(item.ultimaAtualizacao).toLocaleDateString('pt-BR')}</div>
       </div>
       <div style="text-align:right;">
         <div class="mono item-name">${brl(item.precoUnitario)}</div>
-        <button class="btn-danger-ghost" onclick="ajustarEstoque('${item.id}')">estoque</button>
         <button class="btn-danger-ghost" onclick="removerItemCusto('${item.id}')">remover</button>
       </div>
     </div>
   `).join('');
+}
+
+function estoqueMinimoItem(itemId){
+  let minimo = null;
+  state.receitas.forEach(r=>{
+    const ing = r.ingredientes.find(i=>i.itemId===itemId);
+    if(ing){
+      if(minimo===null || ing.quantidade < minimo) minimo = ing.quantidade;
+    }
+  });
+  return minimo;
+}
+
+function renderEstoqueLista(){
+  const el = document.getElementById('estoqueLista');
+  if(state.custosItens.length===0){
+    el.innerHTML = `<div class="empty-state"><span class="drip-icon">📦</span><strong>Nenhum item ainda</strong><span>Cadastre itens na aba Base para controlar o estoque.</span></div>`;
+    return;
+  }
+  const ordenado = [...state.custosItens].sort((a,b)=>(a.estoqueAtual||0)-(b.estoqueAtual||0));
+  el.innerHTML = ordenado.map(item=>{
+    const minimo = estoqueMinimoItem(item.id);
+    const atual = item.estoqueAtual||0;
+    const abaixoMinimo = minimo!==null && atual < minimo;
+    return `
+    <div class="item-row ${abaixoMinimo?'estoque-baixo':''}">
+      <div>
+        <div class="item-name">${escapeHtml(item.nome)} <span class="pill ${item.tipo==='embalagem'?'embalagem':''}">${item.tipo==='embalagem'?'embalagem':'ingrediente'}</span>${abaixoMinimo?'<span class="pill-alerta">abaixo do mínimo</span>':''}</div>
+        <div class="item-sub">${minimo!==null ? 'Mínimo para 1 pudim: '+minimo : 'Ainda não usado em nenhuma receita'}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="mono item-name" style="${abaixoMinimo?'color:#A64545;':''}">${atual}</div>
+        <button class="btn-danger-ghost" onclick="ajustarEstoque('${item.id}')">ajustar</button>
+      </div>
+    </div>
+  `;}).join('');
 }
 
 function ajustarEstoque(id){
@@ -646,6 +795,95 @@ function ajustarEstoque(id){
 function removerItemCusto(id){
   state.custosItens = state.custosItens.filter(i=>i.id!==id);
   saveState().then(()=>{ renderCustosList(); renderSelectIngredienteItem(); });
+}
+
+// ---------- HISTÓRICO DE CUSTOS ----------
+let chartInstance = null;
+
+document.querySelectorAll('.sheet-tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.sheet-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.sheet-panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    const paineis = {base:'sheetBase', estoque:'sheetEstoque', historico:'sheetHistorico'};
+    document.getElementById(paineis[tab.dataset.sheet]).classList.add('active');
+    if(tab.dataset.sheet==='estoque'){
+      renderEstoqueLista();
+    }
+    if(tab.dataset.sheet==='historico'){
+      document.getElementById('historicoChartView').classList.add('hidden');
+      document.getElementById('historicoLista').classList.remove('hidden');
+      renderHistoricoLista();
+    }
+  });
+});
+
+document.getElementById('btnVoltarHistorico').addEventListener('click', ()=>{
+  document.getElementById('historicoChartView').classList.add('hidden');
+  document.getElementById('historicoLista').classList.remove('hidden');
+});
+
+function renderHistoricoLista(){
+  const el = document.getElementById('historicoLista');
+  if(state.custosItens.length===0){
+    el.innerHTML = `<div class="empty-state"><span class="drip-icon">📈</span><strong>Nenhum item ainda</strong><span>Cadastre itens na base de custos para ver o histórico.</span></div>`;
+    return;
+  }
+  el.innerHTML = state.custosItens.map(item=>{
+    const qtdRegistros = (item.historico||[]).length || 1;
+    return `
+    <div class="item-row" style="cursor:pointer;" onclick="verGraficoItem('${item.id}')">
+      <div>
+        <div class="item-name">${escapeHtml(item.nome)} <span class="pill ${item.tipo==='embalagem'?'embalagem':''}">${item.tipo==='embalagem'?'embalagem':'ingrediente'}</span></div>
+        <div class="item-sub">${qtdRegistros} registro(s) de preço</div>
+      </div>
+      <div class="mono item-name">${brl(item.precoUnitario)}</div>
+    </div>
+  `;}).join('');
+}
+
+function verGraficoItem(itemId){
+  const item = state.custosItens.find(i=>i.id===itemId);
+  if(!item) return;
+  document.getElementById('historicoLista').classList.add('hidden');
+  document.getElementById('historicoChartView').classList.remove('hidden');
+  document.getElementById('historicoItemNome').textContent = item.nome;
+
+  const historico = (item.historico && item.historico.length>0) ? item.historico : [{data:item.ultimaAtualizacao||new Date().toISOString(), preco:item.precoUnitario}];
+  const ordenado = [...historico].sort((a,b)=> a.data.localeCompare(b.data));
+  const labels = ordenado.map(h=> new Date(h.data).toLocaleDateString('pt-BR'));
+  const valores = ordenado.map(h=> h.preco);
+
+  const ctx = document.getElementById('historicoChart').getContext('2d');
+  if(chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Preço unitário (R$)',
+        data: valores,
+        borderColor: '#C97A3B',
+        backgroundColor: 'rgba(201,122,59,0.15)',
+        tension: 0.25,
+        fill: true,
+        pointBackgroundColor: '#7A4B2A',
+        pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero:false, ticks: { callback: v => 'R$ '+Number(v).toFixed(2) } }
+      }
+    }
+  });
+
+  const detailEl = document.getElementById('historicoDetalhes');
+  detailEl.innerHTML = [...ordenado].reverse().map(h=>`
+    <div class="summary-line"><span>${new Date(h.data).toLocaleDateString('pt-BR')}</span><span class="mono">${brl(h.preco)}</span></div>
+  `).join('');
 }
 
 // ---------- RECEITAS ----------
@@ -948,10 +1186,35 @@ function renderPainel(){
     ? `Consumo próprio este mês: ${consumosMes.reduce((s,c)=>s+c.quantidade,0)} unidade(s), custo de ${brl(custoConsumoMes)} já descontado do lucro acima.`
     : 'Sem consumo próprio registrado este mês.';
 
-  const canaisEl = document.getElementById('painelCanais');
+  // ---- Faturamento por dia (linha) ----
+  const notaFaturamentoDia = document.getElementById('painelFaturamentoDiaNote');
   if(state.vendas.length===0){
-    canaisEl.innerHTML = `<div class="section-note">Sem vendas registradas ainda.</div>`;
+    notaFaturamentoDia.textContent = 'Sem vendas registradas ainda.';
+    destruirChart('faturamentoDia');
   }else{
+    notaFaturamentoDia.textContent = '';
+    const porDia = {};
+    state.vendas.forEach(v=>{
+      porDia[v.data] = (porDia[v.data]||0) + (v.valorLiquido!==undefined?v.valorLiquido:v.valor);
+    });
+    const diasOrdenados = Object.keys(porDia).sort();
+    desenharChart('faturamentoDia', document.getElementById('chartFaturamentoDia'), {
+      type:'line',
+      data:{
+        labels: diasOrdenados.map(d=>new Date(d+'T00:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})),
+        datasets:[{ label:'Faturamento', data: diasOrdenados.map(d=>porDia[d]), borderColor:'#C97A3B', backgroundColor:'rgba(201,122,59,0.15)', tension:0.25, fill:true, pointBackgroundColor:'#7A4B2A', pointRadius:4 }]
+      },
+      options: baseChartOptions(v=>'R$ '+Number(v).toFixed(0))
+    });
+  }
+
+  // ---- Vendas por canal (barra) ----
+  const notaCanais = document.getElementById('painelCanaisNote');
+  if(state.vendas.length===0){
+    notaCanais.textContent = 'Sem vendas registradas ainda.';
+    destruirChart('canais');
+  }else{
+    notaCanais.textContent = '';
     const porCanal = {};
     state.vendas.forEach(v=>{
       const c = v.canal||'outro';
@@ -959,33 +1222,78 @@ function renderPainel(){
       porCanal[c].qtd += v.quantidade;
       porCanal[c].valor += (v.valorLiquido!==undefined?v.valorLiquido:v.valor);
     });
-    canaisEl.innerHTML = Object.keys(porCanal).sort((a,b)=>porCanal[b].valor-porCanal[a].valor).map(c=>`
-      <div class="canal-row"><span>${CANAL_LABEL[c]||'Outro'}</span><span class="mono">${porCanal[c].qtd} un · ${brl(porCanal[c].valor)}</span></div>
-    `).join('');
+    const canaisOrdenados = Object.keys(porCanal).sort((a,b)=>porCanal[b].valor-porCanal[a].valor);
+    desenharChart('canais', document.getElementById('chartCanais'), {
+      type:'bar',
+      data:{
+        labels: canaisOrdenados.map(c=>CANAL_LABEL[c]||'Outro'),
+        datasets:[{ label:'Faturamento', data: canaisOrdenados.map(c=>porCanal[c].valor), backgroundColor:'#E8A55C', borderRadius:6 }]
+      },
+      options: baseChartOptions(v=>'R$ '+Number(v).toFixed(0))
+    });
   }
 
+  // ---- Desempenho por receita (barra) ----
   const contagem = {};
   state.vendas.forEach(v=>{ contagem[v.receitaId] = (contagem[v.receitaId]||0) + v.quantidade; });
-  const maisVendidaId = Object.keys(contagem).sort((a,b)=>contagem[b]-contagem[a])[0];
-  const maisVendida = state.receitas.find(r=>r.id===maisVendidaId);
-  document.getElementById('painelMaisVendida').textContent = maisVendida
-    ? `${maisVendida.nome} — ${contagem[maisVendidaId]} unidades vendidas ao todo`
-    : 'Sem vendas registradas ainda.';
-
-  const receitasComPreco = state.receitas.filter(r=>r.precoVendaFatia>0);
-  if(receitasComPreco.length===0){
-    document.getElementById('painelMargem').textContent = 'Cadastre receitas com preço de venda para ver a margem.';
+  const notaMaisVendida = document.getElementById('painelMaisVendida');
+  if(Object.keys(contagem).length===0){
+    notaMaisVendida.textContent = 'Sem vendas registradas ainda.';
+    destruirChart('receitas');
   }else{
-    let somaMargem = 0;
-    receitasComPreco.forEach(r=>{
+    const receitasOrdenadas = Object.keys(contagem).sort((a,b)=>contagem[b]-contagem[a]);
+    const nomesReceitas = receitasOrdenadas.map(id=>{ const r = state.receitas.find(x=>x.id===id); return r?r.nome:'Receita removida'; });
+    const maisVendida = state.receitas.find(r=>r.id===receitasOrdenadas[0]);
+    notaMaisVendida.textContent = maisVendida ? `Mais vendida: ${maisVendida.nome} (${contagem[receitasOrdenadas[0]]} unidades ao todo)` : '';
+    desenharChart('receitas', document.getElementById('chartReceitas'), {
+      type:'bar',
+      data:{
+        labels: nomesReceitas,
+        datasets:[{ label:'Unidades vendidas', data: receitasOrdenadas.map(id=>contagem[id]), backgroundColor:'#6E2B3A', borderRadius:6 }]
+      },
+      options: { ...baseChartOptions(v=>Number(v).toFixed(0)), indexAxis:'y' }
+    });
+  }
+
+  // ---- Margem por receita (barra) ----
+  const receitasComPreco = state.receitas.filter(r=>r.precoVendaFatia>0);
+  const notaMargem = document.getElementById('painelMargem');
+  if(receitasComPreco.length===0){
+    notaMargem.textContent = 'Cadastre receitas com preço de venda para ver a margem.';
+    destruirChart('margem');
+  }else{
+    const margens = receitasComPreco.map(r=>{
       const custoTotal = custoTotalReceita(r);
       const custoFatia = custoTotal/(r.rendimentoFatias||1);
-      const margem = ((r.precoVendaFatia - custoFatia)/r.precoVendaFatia)*100;
-      somaMargem += margem;
+      return ((r.precoVendaFatia - custoFatia)/r.precoVendaFatia)*100;
     });
-    const media = somaMargem/receitasComPreco.length;
-    document.getElementById('painelMargem').textContent = `Margem média de ${media.toFixed(0)}% sobre o preço de venda por fatia, considerando as receitas com preço cadastrado.`;
+    const media = margens.reduce((s,m)=>s+m,0)/margens.length;
+    notaMargem.textContent = `Margem média de ${media.toFixed(0)}% sobre o preço de venda por fatia.`;
+    desenharChart('margem', document.getElementById('chartMargem'), {
+      type:'bar',
+      data:{
+        labels: receitasComPreco.map(r=>r.nome),
+        datasets:[{ label:'Margem (%)', data: margens.map(m=>m.toFixed(1)), backgroundColor:'#3F7A4B', borderRadius:6 }]
+      },
+      options: { ...baseChartOptions(v=>Number(v).toFixed(0)+'%'), indexAxis:'y' }
+    });
   }
+}
+
+const paineisCharts = {};
+function baseChartOptions(formatY){
+  return {
+    responsive:true,
+    plugins:{ legend:{ display:false } },
+    scales:{ y:{ ticks:{ callback:formatY } }, x:{ ticks:{ callback:formatY } } }
+  };
+}
+function desenharChart(nome, canvas, config){
+  if(paineisCharts[nome]) paineisCharts[nome].destroy();
+  paineisCharts[nome] = new Chart(canvas.getContext('2d'), config);
+}
+function destruirChart(nome){
+  if(paineisCharts[nome]){ paineisCharts[nome].destroy(); paineisCharts[nome]=null; }
 }
 
 function renderAll(){
@@ -1002,7 +1310,36 @@ function renderAll(){
   atualizarVisibilidadeTaxa();
 }
 
-loadState();
+auth.onAuthStateChanged(user=>{
+  if(user){
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('appContent').classList.remove('hidden');
+    loadState();
+  }else{
+    document.getElementById('loginScreen').classList.remove('hidden');
+    document.getElementById('appContent').classList.add('hidden');
+  }
+});
+
+async function tentarLogin(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const senha = document.getElementById('loginSenha').value;
+  const erroEl = document.getElementById('loginErro');
+  erroEl.style.display = 'none';
+  if(!email || !senha){
+    erroEl.textContent = 'Preencha e-mail e senha.';
+    erroEl.style.display = 'block';
+    return;
+  }
+  try{
+    await auth.signInWithEmailAndPassword(email, senha);
+  }catch(e){
+    erroEl.textContent = 'E-mail ou senha incorretos.';
+    erroEl.style.display = 'block';
+  }
+}
+document.getElementById('btnLogin').addEventListener('click', tentarLogin);
+document.getElementById('loginSenha').addEventListener('keydown', e=>{ if(e.key==='Enter') tentarLogin(); });
 </script>
 </body>
 </html>

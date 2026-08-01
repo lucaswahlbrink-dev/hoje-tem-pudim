@@ -1,6 +1,6 @@
 {
-  "name": "Pudim, ponto a ponto",
-  "short_name": "Pudim",
+  "name": "Hoje Tem Pudim — Bastidores",
+  "short_name": "Hoje Tem Pudim",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#FBF2E1",
