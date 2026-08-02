@@ -484,12 +484,18 @@
 
       <div class="divider-label">Ingredientes diretos desta receita</div>
       <div id="novaReceitaIngredientes"></div>
-      <div class="row" style="margin-bottom:10px;">
-        <select id="selectIngredienteItem"></select>
-        <input type="number" id="inputIngredienteQtd" placeholder="Qtd" class="mono">
-        <select id="selectIngredienteUnidade" class="unidade-select"></select>
+      <button class="btn-ghost btn-small" id="btnAbrirAddIngrediente" style="margin-bottom:10px;">+ Adicionar ingrediente</button>
+      <div id="ingredienteAddArea" class="hidden">
+        <div class="row" style="margin-bottom:10px;">
+          <select id="selectIngredienteItem"></select>
+          <input type="number" id="inputIngredienteQtd" placeholder="Qtd" class="mono">
+          <select id="selectIngredienteUnidade" class="unidade-select"></select>
+        </div>
+        <div class="row" style="margin-bottom:10px;">
+          <button class="btn-secondary" id="btnAddIngrediente">OK</button>
+          <button class="btn-ghost" id="btnFecharAddIngrediente">Cancelar</button>
+        </div>
       </div>
-      <button class="btn-ghost btn-small" id="btnAddIngrediente" style="margin-bottom:10px;">+ Adicionar ingrediente</button>
 
       <div class="divider-label">🥣 Calda desta receita (opcional)</div>
       <div id="caldaAtualResumo"></div>
@@ -504,12 +510,18 @@
         <label>Nome da calda</label>
         <input type="text" id="novaCaldaNome" placeholder="Ex: Calda de caramelo">
         <div id="novaCaldaIngredientes"></div>
-        <div class="row" style="margin-bottom:8px;">
-          <select id="selectCaldaItem"></select>
-          <input type="number" id="inputCaldaQtd" placeholder="Qtd" class="mono">
-          <select id="selectCaldaUnidade" class="unidade-select"></select>
+        <button class="btn-ghost btn-small" id="btnAbrirAddCaldaIngrediente" style="margin-bottom:10px;">+ Adicionar ingrediente à calda</button>
+        <div id="caldaIngredienteAddArea" class="hidden">
+          <div class="row" style="margin-bottom:8px;">
+            <select id="selectCaldaItem"></select>
+            <input type="number" id="inputCaldaQtd" placeholder="Qtd" class="mono">
+            <select id="selectCaldaUnidade" class="unidade-select"></select>
+          </div>
+          <div class="row" style="margin-bottom:10px;">
+            <button class="btn-secondary" id="btnAddCaldaIngrediente">OK</button>
+            <button class="btn-ghost" id="btnFecharAddCaldaIngrediente">Cancelar</button>
+          </div>
         </div>
-        <button class="btn-ghost btn-small" id="btnAddCaldaIngrediente" style="margin-bottom:10px;">+ Adicionar ingrediente à calda</button>
         <label>Rende (quanto essa receita de calda produz no total)</label>
         <div class="row">
           <input type="number" id="novaCaldaRendeQtd" class="mono" placeholder="Ex: 1">
@@ -1745,6 +1757,12 @@ function renderSelectCaldaItem(){
   sel.innerHTML = state.custosItens.map(i=>`<option value="${i.id}">${escapeHtml(i.nome)}</option>`).join('');
 }
 
+document.getElementById('btnAbrirAddCaldaIngrediente').addEventListener('click', ()=>{
+  document.getElementById('caldaIngredienteAddArea').classList.remove('hidden');
+});
+document.getElementById('btnFecharAddCaldaIngrediente').addEventListener('click', ()=>{
+  document.getElementById('caldaIngredienteAddArea').classList.add('hidden');
+});
 document.getElementById('btnAddCaldaIngrediente').addEventListener('click', ()=>{
   const itemId = document.getElementById('selectCaldaItem').value;
   const qtd = parseFloat(document.getElementById('inputCaldaQtd').value);
@@ -1754,6 +1772,7 @@ document.getElementById('btnAddCaldaIngrediente').addEventListener('click', ()=>
   novaCaldaIngredientesTemp.push({itemId, nome:item.nome, quantidade:qtd, unidade});
   document.getElementById('inputCaldaQtd').value='';
   renderNovaCaldaIngredientesTemp();
+  document.getElementById('caldaIngredienteAddArea').classList.add('hidden');
 });
 function renderNovaCaldaIngredientesTemp(){
   const el = document.getElementById('novaCaldaIngredientes');
@@ -1865,6 +1884,12 @@ function renderCaldaSecaoReceita(){
 }
 
 // ---------- RECEITAS: INGREDIENTES ----------
+document.getElementById('btnAbrirAddIngrediente').addEventListener('click', ()=>{
+  document.getElementById('ingredienteAddArea').classList.remove('hidden');
+});
+document.getElementById('btnFecharAddIngrediente').addEventListener('click', ()=>{
+  document.getElementById('ingredienteAddArea').classList.add('hidden');
+});
 document.getElementById('btnAddIngrediente').addEventListener('click', ()=>{
   const itemId = document.getElementById('selectIngredienteItem').value;
   const qtd = parseFloat(document.getElementById('inputIngredienteQtd').value);
@@ -1874,6 +1899,7 @@ document.getElementById('btnAddIngrediente').addEventListener('click', ()=>{
   novaReceitaIngredientesTemp.push({itemId, nome:item.nome, quantidade:qtd, unidade});
   document.getElementById('inputIngredienteQtd').value='';
   renderNovaReceitaIngredientes();
+  document.getElementById('ingredienteAddArea').classList.add('hidden');
 });
 
 function renderNovaReceitaIngredientes(){
@@ -1954,6 +1980,7 @@ function editarReceita(id){
   renderNovaReceitaIngredientes();
   receitaCaldaAtual = r.calda ? {...r.calda} : null;
   renderCaldaSecaoReceita();
+  document.getElementById('ingredienteAddArea').classList.add('hidden');
   document.getElementById('btnSalvarReceita').textContent = 'Salvar alterações';
   document.getElementById('btnCancelarEdicaoReceita').classList.remove('hidden');
   document.getElementById('tab-receitas').scrollIntoView({behavior:'smooth'});
@@ -1969,6 +1996,7 @@ function cancelarEdicaoReceita(){
   renderNovaReceitaIngredientes();
   receitaCaldaAtual = null;
   renderCaldaSecaoReceita();
+  document.getElementById('ingredienteAddArea').classList.add('hidden');
   document.getElementById('btnSalvarReceita').textContent = 'Salvar receita';
   document.getElementById('btnCancelarEdicaoReceita').classList.add('hidden');
 }
