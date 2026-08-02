@@ -151,7 +151,7 @@
   .venda-top{display:flex;justify-content:space-between;font-weight:600;font-size:14px;}
   .venda-meta{font-size:12px;color:var(--muted);margin-top:2px;}
   .section-note{font-size:12px;color:var(--muted);margin:-4px 0 12px 0;line-height:1.5;}
-  .summary-line{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;}
+  .summary-line{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;font-size:13px;}
   .summary-line.total{border-top:1px solid var(--border);margin-top:4px;padding-top:10px;font-weight:700;}
   .divider-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 8px 0;}
   .canal-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
@@ -1588,6 +1588,9 @@ function verGraficoItem(tipo, itemId){
   document.getElementById(cfg.chartViewId).classList.remove('hidden');
   document.getElementById(cfg.nomeId).textContent = item.nome;
 
+  if(item.historico && item.historico.length>0){
+    item.historico.forEach(h=>{ if(!h.id) h.id = uid(); });
+  }
   const historico = (item.historico && item.historico.length>0) ? item.historico : [{data:item.ultimaAtualizacao||new Date().toISOString(), preco:item.precoUnitario}];
   const ordenado = [...historico].sort((a,b)=> a.data.localeCompare(b.data));
   const labels = ordenado.map(h=> new Date(h.data).toLocaleDateString('pt-BR'));
@@ -1621,8 +1624,29 @@ function verGraficoItem(tipo, itemId){
 
   const detailEl = document.getElementById(cfg.detalhesId);
   detailEl.innerHTML = [...ordenado].reverse().map(h=>`
-    <div class="summary-line"><span>${new Date(h.data).toLocaleDateString('pt-BR')}</span><span class="mono">${brl(h.preco)}</span></div>
+    <div class="summary-line">
+      <span>${new Date(h.data).toLocaleDateString('pt-BR')}</span>
+      <span class="mono">${brl(h.preco)}</span>
+      ${h.id ? `<button class="btn-danger-ghost" onclick="removerHistoricoEntry('${tipo}','${itemId}','${h.id}')">remover</button>` : ''}
+    </div>
   `).join('');
+}
+
+function removerHistoricoEntry(tipo, itemId, entryId){
+  const cfg = TIPO_CONFIG[tipo];
+  const item = cfg.arr().find(i=>i.id===itemId);
+  if(!item || !item.historico) return;
+  item.historico = item.historico.filter(h=>h.id!==entryId);
+  if(item.historico.length>0){
+    const maisRecente = [...item.historico].sort((a,b)=> b.data.localeCompare(a.data))[0];
+    item.precoUnitario = maisRecente.preco;
+    item.ultimaAtualizacao = maisRecente.data;
+  }
+  saveState().then(()=>{
+    showToast('Registro removido.');
+    verGraficoItem(tipo, itemId);
+    renderItensBase(tipo);
+  });
 }
 
 // ---------- RECEITAS ----------
