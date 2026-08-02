@@ -953,6 +953,10 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 // ---------- ASSISTENTE DE COMPRAS ----------
 let planoComprasLinhas = [];
 
+function limparResultadoListaCompras(){
+  document.getElementById('resultadoListaCompras').innerHTML = `<div class="section-note">Plano alterado. Toque em "Calcular lista de compras" de novo para atualizar.</div>`;
+}
+
 function renderPlanoComprasLinhas(){
   const el = document.getElementById('planoComprasLinhas');
   if(planoComprasLinhas.length===0){
@@ -971,10 +975,10 @@ function renderPlanoComprasLinhas(){
     </div>
   `).join('');
   el.querySelectorAll('.plano-receita').forEach(sel=>{
-    sel.addEventListener('change', ()=>{ planoComprasLinhas[sel.dataset.idx].receitaId = sel.value; });
+    sel.addEventListener('change', ()=>{ planoComprasLinhas[sel.dataset.idx].receitaId = sel.value; limparResultadoListaCompras(); });
   });
   el.querySelectorAll('.plano-qtd').forEach(inp=>{
-    inp.addEventListener('input', ()=>{ planoComprasLinhas[inp.dataset.idx].quantidade = parseFloat(inp.value)||0; });
+    inp.addEventListener('input', ()=>{ planoComprasLinhas[inp.dataset.idx].quantidade = parseFloat(inp.value)||0; limparResultadoListaCompras(); });
   });
 }
 
@@ -982,10 +986,12 @@ document.getElementById('btnAddLinhaPlano').addEventListener('click', ()=>{
   if(state.receitas.length===0){ showToast('Cadastre uma receita primeiro.'); return; }
   planoComprasLinhas.push({ receitaId: state.receitas[0].id, quantidade: 1 });
   renderPlanoComprasLinhas();
+  limparResultadoListaCompras();
 });
 function removerLinhaPlano(idx){
   planoComprasLinhas.splice(idx,1);
   renderPlanoComprasLinhas();
+  limparResultadoListaCompras();
 }
 
 function arredondarCompra(n){
