@@ -221,6 +221,27 @@
     font-size:13px;
   }
 
+  .check-item-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 0;
+    border-bottom:1px solid var(--border);
+    cursor:pointer;
+  }
+  .check-item-row:last-child{border-bottom:none;}
+  .check-item-row input[type="checkbox"]{
+    width:20px;
+    height:20px;
+    accent-color:var(--good);
+    flex:none;
+  }
+  .check-item-texto{font-size:14px;transition:opacity .2s ease;}
+  .check-item-texto.check-riscado{
+    text-decoration:line-through;
+    opacity:.45;
+  }
+
   .calc-box{
     background:var(--cream);
     border:1px dashed var(--sugar);
@@ -259,6 +280,15 @@
   <!-- ABA COMPRAS -->
   <section class="tab-panel active" id="tab-compras">
     <div class="card">
+      <h2>📝 Assistente de Compras</h2>
+      <p class="section-note">Diga quantos pudins de cada receita você vai fazer, o app calcula o que falta comprar, já descontando o que já tem no estoque.</p>
+      <div id="planoComprasLinhas"></div>
+      <button class="btn-ghost btn-small" id="btnAddLinhaPlano" style="margin-top:4px;">+ Adicionar receita ao plano</button>
+      <button class="btn-primary" id="btnCalcularListaCompras" style="margin-top:12px;">Calcular lista de compras</button>
+      <div id="resultadoListaCompras" style="margin-top:14px;"></div>
+    </div>
+
+    <div class="card">
       <h2>Fotografar nota de compra</h2>
       <p class="section-note">Tire a foto, a IA identifica os itens e valores. Você confere, escolhe se é ingrediente ou embalagem, e só então salva.</p>
       <input type="file" accept="image/*" capture="environment" id="photoInput" style="display:none">
@@ -281,6 +311,8 @@
         <div id="manualItemForm" class="hidden" style="margin-top:12px;">
           <label>Nome do item</label>
           <input type="text" id="manualNome" placeholder="Ex: Leite condensado">
+          <label>Unidade em que este item é medido (a mesma que você vai usar nas receitas)</label>
+          <select id="manualUnidadeBase" class="mono"></select>
           <div class="calc-box">
             <p class="section-note" style="margin:0 0 8px 0;">🧮 Comprou em caixa/pacote? Preencha aqui para calcular sozinho.</p>
             <div class="row">
@@ -293,7 +325,7 @@
                 <input type="number" id="calcEmbalagens" class="mono" placeholder="Ex: 9">
               </div>
             </div>
-            <label>Unidades dentro de cada embalagem</label>
+            <label>Quantidade (na unidade acima) dentro de cada embalagem</label>
             <input type="number" id="calcUnidadesPorEmbalagem" class="mono" placeholder="Ex: 20">
             <button class="btn-ghost btn-small" id="btnCalcularManual" style="margin-top:4px;">Calcular preço e estoque</button>
           </div>
@@ -301,6 +333,8 @@
           <input type="number" id="manualPreco" class="mono" placeholder="0,00">
           <label>Estoque inicial</label>
           <input type="number" id="manualEstoque" placeholder="0">
+          <label>1 xícara deste item = quantos gramas? (opcional, só se for medir por xícara/colher na receita)</label>
+          <input type="number" id="manualXicaraGramas" class="mono" placeholder="Ex: 180 (deixe em branco se não precisar)">
           <div class="row">
             <button class="btn-primary" id="btnSalvarManual">Salvar item</button>
             <button class="btn-ghost" id="btnCancelarManual">Cancelar</button>
@@ -360,6 +394,10 @@
           <input type="number" id="manualEmbPreco" class="mono" placeholder="0,00">
           <label>Estoque inicial</label>
           <input type="number" id="manualEmbEstoque" placeholder="0">
+          <label class="emb-check-label" style="margin-bottom:12px;">
+            <input type="checkbox" id="manualEmbIncluirPrecificacao" checked>
+            <span>Incluir esta embalagem nas opções de Precificação</span>
+          </label>
           <div class="row">
             <button class="btn-primary" id="btnSalvarEmbalagemManual">Salvar embalagem</button>
             <button class="btn-ghost" id="btnCancelarEmbalagemManual">Cancelar</button>
@@ -714,7 +752,7 @@ function custoItensReceita(r){
   let total = 0;
   r.ingredientes.forEach(ing=>{
     const item = state.custosItens.find(i=>i.id===ing.itemId);
-    if(item) total += item.precoUnitario*ing.quantidade;
+    if(item) total += custoConvertido(item, ing.quantidade, ing.unidade);
   });
   return total;
 }
@@ -745,13 +783,16 @@ function embalagemArrayToMap(arr){
   return map;
 }
 
-function renderEmbalagemChecklist(containerId, mapaSelecionado, onChange){
+function renderEmbalagemChecklist(containerId, mapaSelecionado, onChange, apenasPrecificaveis){
   const el = document.getElementById(containerId);
-  if(state.embalagens.length===0){
-    el.innerHTML = `<div class="section-note">Nenhuma embalagem cadastrada ainda. Cadastre em Compras → 🎁 Embalagens.</div>`;
+  const lista = apenasPrecificaveis ? state.embalagens.filter(e=>e.incluirNaPrecificacao!==false) : state.embalagens;
+  if(lista.length===0){
+    el.innerHTML = apenasPrecificaveis
+      ? `<div class="section-note">Nenhuma embalagem marcada para entrar na Precificação. Ajuste em Compras → 🎁 Embalagens.</div>`
+      : `<div class="section-note">Nenhuma embalagem cadastrada ainda. Cadastre em Compras → 🎁 Embalagens.</div>`;
     return;
   }
-  el.innerHTML = state.embalagens.map(emb=>{
+  el.innerHTML = lista.map(emb=>{
     const marcado = mapaSelecionado.hasOwnProperty(emb.id);
     const qtd = marcado ? mapaSelecionado[emb.id] : 1;
     return `
@@ -845,6 +886,128 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     if(btn.dataset.tab==='painel') renderPainel();
   });
 });
+
+// ---------- ASSISTENTE DE COMPRAS ----------
+let planoComprasLinhas = [];
+
+function renderPlanoComprasLinhas(){
+  const el = document.getElementById('planoComprasLinhas');
+  if(planoComprasLinhas.length===0){
+    el.innerHTML = `<div class="section-note">Nenhuma receita no plano ainda.</div>`;
+    return;
+  }
+  if(state.receitas.length===0){
+    el.innerHTML = `<div class="section-note">Cadastre uma receita primeiro, na aba Receitas.</div>`;
+    return;
+  }
+  el.innerHTML = planoComprasLinhas.map((linha, idx)=>`
+    <div class="row" style="margin-bottom:8px;">
+      <select class="plano-receita" data-idx="${idx}">${state.receitas.map(r=>`<option value="${r.id}" ${r.id===linha.receitaId?'selected':''}>${escapeHtml(r.nome)}</option>`).join('')}</select>
+      <input type="number" class="plano-qtd mono" data-idx="${idx}" value="${linha.quantidade}" style="max-width:80px;flex:none;" placeholder="Qtd">
+      <button class="btn-danger-ghost" onclick="removerLinhaPlano(${idx})">remover</button>
+    </div>
+  `).join('');
+  el.querySelectorAll('.plano-receita').forEach(sel=>{
+    sel.addEventListener('change', ()=>{ planoComprasLinhas[sel.dataset.idx].receitaId = sel.value; });
+  });
+  el.querySelectorAll('.plano-qtd').forEach(inp=>{
+    inp.addEventListener('input', ()=>{ planoComprasLinhas[inp.dataset.idx].quantidade = parseFloat(inp.value)||0; });
+  });
+}
+
+document.getElementById('btnAddLinhaPlano').addEventListener('click', ()=>{
+  if(state.receitas.length===0){ showToast('Cadastre uma receita primeiro.'); return; }
+  planoComprasLinhas.push({ receitaId: state.receitas[0].id, quantidade: 1 });
+  renderPlanoComprasLinhas();
+});
+function removerLinhaPlano(idx){
+  planoComprasLinhas.splice(idx,1);
+  renderPlanoComprasLinhas();
+}
+
+function arredondarCompra(n){
+  return Math.round(n*100)/100;
+}
+
+function calcularListaCompras(){
+  if(planoComprasLinhas.length===0){ showToast('Adicione ao menos uma receita ao plano.'); return; }
+  const precisaIngrediente = {};
+  const precisaEmbalagem = {};
+
+  planoComprasLinhas.forEach(linha=>{
+    const r = state.receitas.find(x=>x.id===linha.receitaId);
+    if(!r || !linha.quantidade) return;
+    const n = linha.quantidade;
+
+    r.ingredientes.forEach(ing=>{
+      precisaIngrediente[ing.itemId] = (precisaIngrediente[ing.itemId]||0) + ing.quantidade*n;
+    });
+
+    if(r.calda && r.calda.componenteId){
+      const comp = state.componentes.find(c=>c.id===r.calda.componenteId);
+      if(comp && comp.rendimentoQtd){
+        const proporcao = (r.calda.quantidade * n) / comp.rendimentoQtd;
+        comp.ingredientes.forEach(ing=>{
+          precisaIngrediente[ing.itemId] = (precisaIngrediente[ing.itemId]||0) + ing.quantidade*proporcao;
+        });
+      }
+    }
+
+    (r.embalagemPadrao||[]).forEach(emb=>{
+      precisaEmbalagem[emb.itemId] = (precisaEmbalagem[emb.itemId]||0) + emb.quantidade*n;
+    });
+  });
+
+  const faltandoIngredientes = Object.keys(precisaIngrediente).map(itemId=>{
+    const item = state.custosItens.find(i=>i.id===itemId);
+    if(!item) return null;
+    const falta = precisaIngrediente[itemId] - (item.estoqueAtual||0);
+    return falta>0.005 ? {nome:item.nome, falta:arredondarCompra(falta)} : null;
+  }).filter(Boolean);
+
+  const faltandoEmbalagens = Object.keys(precisaEmbalagem).map(itemId=>{
+    const item = state.embalagens.find(i=>i.id===itemId);
+    if(!item) return null;
+    const falta = precisaEmbalagem[itemId] - (item.estoqueAtual||0);
+    return falta>0.005 ? {nome:item.nome, falta:arredondarCompra(falta)} : null;
+  }).filter(Boolean);
+
+  renderListaCompras(faltandoIngredientes, faltandoEmbalagens);
+}
+document.getElementById('btnCalcularListaCompras').addEventListener('click', calcularListaCompras);
+
+function renderListaCompras(ingredientes, embalagens){
+  const el = document.getElementById('resultadoListaCompras');
+  if(ingredientes.length===0 && embalagens.length===0){
+    el.innerHTML = `<div class="empty-state"><span class="drip-icon">✅</span><strong>Está tudo no estoque!</strong><span>Não falta nada para esse plano.</span></div>`;
+    return;
+  }
+  let html = `<div class="divider-label">🛒 Itens para comprar</div>`;
+  if(ingredientes.length>0){
+    html += `<p class="section-note" style="margin-top:0;">Ingredientes</p>`;
+    html += ingredientes.map(i=>`
+      <label class="check-item-row">
+        <input type="checkbox" class="check-compra">
+        <span class="check-item-texto">${escapeHtml(i.nome)} <span class="mono">— ${i.falta}</span></span>
+      </label>
+    `).join('');
+  }
+  if(embalagens.length>0){
+    html += `<p class="section-note">Embalagens</p>`;
+    html += embalagens.map(i=>`
+      <label class="check-item-row">
+        <input type="checkbox" class="check-compra">
+        <span class="check-item-texto">${escapeHtml(i.nome)} <span class="mono">— ${i.falta}</span></span>
+      </label>
+    `).join('');
+  }
+  el.innerHTML = html;
+  el.querySelectorAll('.check-compra').forEach(chk=>{
+    chk.addEventListener('change', ()=>{
+      chk.nextElementSibling.classList.toggle('check-riscado', chk.checked);
+    });
+  });
+}
 
 // ---------- COMPRAS: FOTO ----------
 document.getElementById('btnTakePhoto').addEventListener('click', ()=>{
@@ -940,6 +1103,7 @@ function renderExtractedItems(){
         </select>
         <input type="number" value="${item.quantidade}" class="ex-qtd qtd mono" placeholder="Qtd">
         <input type="number" value="${item.valor}" class="ex-valor valor mono" placeholder="R$">
+        <select class="ex-unidade unidade-select"></select>
         <select class="ex-vincular"></select>
       </div>`;
   });
@@ -951,6 +1115,7 @@ function renderExtractedItems(){
     const tipoInicial = row.querySelector('.ex-tipo').value;
     const sugestao = sugerirItemExistente(item.nome, TIPO_CONFIG[tipoInicial].arr());
     renderVincularSelect(row, tipoInicial, sugestao ? sugestao.id : null);
+    row.querySelector('.ex-unidade').innerHTML = unidadeOptions('un');
     row.querySelector('.ex-tipo').addEventListener('change', ()=>{
       const novoTipo = row.querySelector('.ex-tipo').value;
       const nomeAtual = row.querySelector('.ex-nome').value;
@@ -965,6 +1130,7 @@ function renderExtractedItems(){
       const tipo = row.querySelector('.ex-tipo').value;
       const qtd = parseFloat(row.querySelector('.ex-qtd').value)||1;
       const valor = parseFloat(row.querySelector('.ex-valor').value)||0;
+      const unidadeBase = row.querySelector('.ex-unidade').value;
       const vinculoId = row.querySelector('.ex-vincular').value;
       if(!nome) return;
       const custoUnitario = qtd>0 ? valor/qtd : valor;
@@ -978,7 +1144,7 @@ function renderExtractedItems(){
         if(!existente.historico) existente.historico = [];
         existente.historico.push({data: agora, preco: custoUnitario});
       }else{
-        arr.push({id:uid(), nome, precoUnitario:custoUnitario, estoqueAtual:qtd, ultimaAtualizacao:agora, historico:[{data:agora, preco:custoUnitario}]});
+        arr.push({id:uid(), nome, precoUnitario:custoUnitario, estoqueAtual:qtd, unidadeBase: tipo==='ingrediente'?unidadeBase:'un', incluirNaPrecificacao:true, ultimaAtualizacao:agora, historico:[{data:agora, preco:custoUnitario}]});
       }
     });
     saveState().then(ok=>{
@@ -1028,12 +1194,15 @@ document.getElementById('btnSalvarManual').addEventListener('click', ()=>{
   const nome = document.getElementById('manualNome').value.trim();
   const preco = parseFloat(document.getElementById('manualPreco').value)||0;
   const estoque = parseFloat(document.getElementById('manualEstoque').value)||0;
+  const unidadeBase = document.getElementById('manualUnidadeBase').value;
+  const xicaraGramas = parseFloat(document.getElementById('manualXicaraGramas').value)||null;
   if(!nome){ showToast('Dê um nome para o item.'); return; }
   const agora = new Date().toISOString();
-  state.custosItens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
+  state.custosItens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, unidadeBase, xicaraEmGramas:xicaraGramas, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
   document.getElementById('manualNome').value='';
   document.getElementById('manualPreco').value='';
   document.getElementById('manualEstoque').value='';
+  document.getElementById('manualXicaraGramas').value='';
   document.getElementById('calcPrecoTotal').value='';
   document.getElementById('calcEmbalagens').value='';
   document.getElementById('calcUnidadesPorEmbalagem').value='';
@@ -1061,12 +1230,14 @@ document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()
   const nome = document.getElementById('manualEmbNome').value.trim();
   const preco = parseFloat(document.getElementById('manualEmbPreco').value)||0;
   const estoque = parseFloat(document.getElementById('manualEmbEstoque').value)||0;
+  const incluirPrecificacao = document.getElementById('manualEmbIncluirPrecificacao').checked;
   if(!nome){ showToast('Dê um nome para a embalagem.'); return; }
   const agora = new Date().toISOString();
-  state.embalagens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
+  state.embalagens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, incluirNaPrecificacao:incluirPrecificacao, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
   document.getElementById('manualEmbNome').value='';
   document.getElementById('manualEmbPreco').value='';
   document.getElementById('manualEmbEstoque').value='';
+  document.getElementById('manualEmbIncluirPrecificacao').checked = true;
   document.getElementById('calcEmbPrecoTotal').value='';
   document.getElementById('calcEmbEmbalagens').value='';
   document.getElementById('calcEmbUnidadesPorEmbalagem').value='';
@@ -1086,7 +1257,13 @@ function renderItensBase(tipo){
     <div class="item-row">
       <div>
         <div class="item-name">${escapeHtml(item.nome)}</div>
-        <div class="item-sub">Atualizado em ${new Date(item.ultimaAtualizacao).toLocaleDateString('pt-BR')}</div>
+        <div class="item-sub">Atualizado em ${new Date(item.ultimaAtualizacao).toLocaleDateString('pt-BR')}${tipo==='ingrediente' ? ' · unidade: '+(item.unidadeBase||'un')+(item.xicaraEmGramas?' · 1 xícara = '+item.xicaraEmGramas+'g':'') : ''}</div>
+        ${tipo==='embalagem' ? `
+        <label class="emb-check-label" style="margin-top:4px;font-size:12px;">
+          <input type="checkbox" class="toggle-precificacao" data-id="${item.id}" ${item.incluirNaPrecificacao!==false?'checked':''}>
+          <span>Incluir na Precificação</span>
+        </label>` : ''}
+        ${tipo==='ingrediente' ? `<button class="btn-ghost btn-small" onclick="ajustarUnidadeItem('${item.id}')" style="margin-top:4px;padding:3px 8px;font-size:11px;">⚙️ unidade</button>` : ''}
       </div>
       <div style="text-align:right;">
         <div class="mono item-name">${brl(item.precoUnitario)}</div>
@@ -1094,6 +1271,17 @@ function renderItensBase(tipo){
       </div>
     </div>
   `).join('');
+  if(tipo==='embalagem'){
+    el.querySelectorAll('.toggle-precificacao').forEach(chk=>{
+      chk.addEventListener('change', ()=>{
+        const item = state.embalagens.find(i=>i.id===chk.dataset.id);
+        if(item){
+          item.incluirNaPrecificacao = chk.checked;
+          saveState().then(()=>showToast(chk.checked ? 'Incluída na Precificação.' : 'Removida da Precificação.'));
+        }
+      });
+    });
+  }
 }
 
 function estoqueMinimoItem(itemId){
@@ -1142,6 +1330,19 @@ function ajustarEstoque(tipo, id){
   if(novo===null) return;
   item.estoqueAtual = parseFloat(novo)||0;
   saveState().then(()=>renderEstoqueLista(tipo));
+}
+
+function ajustarUnidadeItem(id){
+  const item = state.custosItens.find(i=>i.id===id);
+  if(!item) return;
+  const novaUnidade = prompt('Unidade em que "'+item.nome+'" é medido (g, kg, ml, L, un, xícara, colher sopa, colher chá, lata, pacote):', item.unidadeBase||'un');
+  if(novaUnidade===null) return;
+  item.unidadeBase = UNIDADES.includes(novaUnidade.trim()) ? novaUnidade.trim() : (item.unidadeBase||'un');
+  const novaEquiv = prompt('1 xícara de "'+item.nome+'" equivale a quantos gramas? (deixe em branco se não precisar, ou se essa medida não se aplica)', item.xicaraEmGramas||'');
+  if(novaEquiv!==null){
+    item.xicaraEmGramas = novaEquiv.trim()==='' ? null : parseFloat(novaEquiv)||null;
+  }
+  saveState().then(()=>{ renderItensBase('ingrediente'); showToast('Unidade atualizada.'); });
 }
 
 function removerItem(tipo, id){
@@ -1268,18 +1469,62 @@ function unidadeOptions(selecionada){
   return UNIDADES.map(u=>`<option value="${u}" ${u===selecionada?'selected':''}>${u}</option>`).join('');
 }
 
+// ---------- CONVERSÃO DE UNIDADES ----------
+const FAMILIA_UNIDADE = { g:'massa', kg:'massa', ml:'volume', L:'volume', 'xícara':'volume', 'colher sopa':'volume', 'colher chá':'volume', un:'contagem', lata:'contagem', pacote:'contagem' };
+const PARA_ML = { ml:1, L:1000, 'xícara':240, 'colher sopa':15, 'colher chá':5 };
+const PARA_G = { g:1, kg:1000 };
+
+// Converte "qtd" de unidadeOrigem para unidadeDestino. Usa item.xicaraEmGramas como ponte
+// quando precisa cruzar de volume para massa (ou o contrário). Retorna null se não for possível converter.
+function converterQuantidade(qtd, unidadeOrigem, unidadeDestino, item){
+  if(!unidadeOrigem || !unidadeDestino || unidadeOrigem===unidadeDestino) return qtd;
+  const famO = FAMILIA_UNIDADE[unidadeOrigem];
+  const famD = FAMILIA_UNIDADE[unidadeDestino];
+  if(!famO || !famD) return qtd;
+  if(famO==='contagem' || famD==='contagem') return qtd; // "un", "lata", "pacote" não convertem
+  if(famO==='volume' && famD==='volume'){
+    return qtd * PARA_ML[unidadeOrigem] / PARA_ML[unidadeDestino];
+  }
+  if(famO==='massa' && famD==='massa'){
+    return qtd * PARA_G[unidadeOrigem] / PARA_G[unidadeDestino];
+  }
+  // cruzando de família: só dá com a equivalência de xícara deste item específico
+  if(item && item.xicaraEmGramas){
+    if(famO==='volume' && famD==='massa'){
+      const emXicaras = qtd * PARA_ML[unidadeOrigem] / PARA_ML['xícara'];
+      const gramas = emXicaras * item.xicaraEmGramas;
+      return gramas / PARA_G[unidadeDestino];
+    }
+    if(famO==='massa' && famD==='volume'){
+      const gramas = qtd * PARA_G[unidadeOrigem];
+      const emXicaras = gramas / item.xicaraEmGramas;
+      return emXicaras * PARA_ML['xícara'] / PARA_ML[unidadeDestino];
+    }
+  }
+  return null; // não é possível converter sem a equivalência
+}
+
+// Calcula o custo de "qtd" de "unidade" de um item, convertendo para a unidade base dele quando possível
+function custoConvertido(item, qtd, unidade){
+  if(!item) return 0;
+  const convertido = converterQuantidade(qtd, unidade, item.unidadeBase, item);
+  if(convertido===null) return item.precoUnitario * qtd; // não deu para converter, usa o número puro (comportamento antigo)
+  return item.precoUnitario * convertido;
+}
+
 let novaCaldaIngredientesTemp = [];
 let receitaCaldaAtual = null; // {componenteId, quantidade, unidade} ou null
 
 document.getElementById('selectCaldaUnidade').innerHTML = unidadeOptions();
 document.getElementById('novaCaldaRendeUnidade').innerHTML = unidadeOptions();
 document.getElementById('selectIngredienteUnidade').innerHTML = unidadeOptions();
+document.getElementById('manualUnidadeBase').innerHTML = unidadeOptions('un');
 
 function custoComponente(comp){
   let total = 0;
   comp.ingredientes.forEach(ing=>{
     const item = state.custosItens.find(i=>i.id===ing.itemId);
-    if(item) total += item.precoUnitario*ing.quantidade;
+    if(item) total += custoConvertido(item, ing.quantidade, ing.unidade);
   });
   return total;
 }
@@ -1595,7 +1840,7 @@ function calcularPrecificacao(){
   card.style.display='block';
   document.getElementById('precifTitulo').textContent = 'Precificação — ' + r.nome;
 
-  renderEmbalagemChecklist('precifEmbalagensLista', embalagemArrayToMap(r.embalagemPadrao), atualizarTotaisPrecificacao);
+  renderEmbalagemChecklist('precifEmbalagensLista', embalagemArrayToMap(r.embalagemPadrao), atualizarTotaisPrecificacao, true);
   document.getElementById('precoVendaFatia').value = r.precoVendaFatia || '';
   document.getElementById('precoVendaInteiro').value = r.precoVendaInteiro || '';
 
@@ -1931,6 +2176,7 @@ function renderAll(){
   if(!state.config) state.config = { potenciaForno: 1800, valorKwh: 1.2006 };
   document.getElementById('configPotencia').value = state.config.potenciaForno;
   document.getElementById('configKwh').value = state.config.valorKwh;
+  renderPlanoComprasLinhas();
   renderItensBase('ingrediente');
   renderItensBase('embalagem');
   renderSelectIngredienteItem();
