@@ -114,6 +114,37 @@
   .loading-dots{display:flex;gap:4px;align-items:center;justify-content:center;padding:20px;color:var(--muted);font-size:13px;}
   .toast{position:fixed;bottom:92px;left:50%;transform:translateX(-50%);background:var(--caramel-deep);color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .25s ease, transform .25s ease;z-index:100;white-space:nowrap;}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
+  .undo-toast{
+    position:fixed;
+    bottom:92px;left:50%;
+    transform:translateX(-50%) translateY(10px);
+    background:var(--caramel-deep);
+    color:#fff;
+    padding:12px 14px 12px 18px;
+    border-radius:14px;
+    font-size:13px;
+    font-weight:500;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .25s ease, transform .25s ease;
+    z-index:101;
+    box-shadow:0 6px 20px rgba(0,0,0,0.2);
+    max-width:90vw;
+  }
+  .undo-toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
+  .undo-toast #btnUndo{
+    background:var(--sugar);
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:7px 14px;
+    font-size:13px;
+    font-weight:700;
+    flex:none;
+  }
   .filter-bar{display:flex;flex-direction:column;gap:0;}
   .venda-row{padding:12px 0;border-bottom:1px solid var(--border);}
   .venda-row:last-child{border-bottom:none;}
@@ -309,6 +340,7 @@
         <div id="custosList"></div>
         <button class="btn-ghost btn-small" id="btnAddItemManual" style="margin-top:8px;">+ Adicionar ingrediente manualmente</button>
         <div id="manualItemForm" class="hidden" style="margin-top:12px;">
+          <p class="section-note" id="manualFormTitulo" style="font-weight:700;color:var(--caramel-deep);font-size:13px;">Novo ingrediente</p>
           <label>Nome do item</label>
           <input type="text" id="manualNome" placeholder="Ex: Leite condensado">
           <label>Unidade em que este item é medido (a mesma que você vai usar nas receitas)</label>
@@ -372,6 +404,7 @@
         <div id="embalagensList"></div>
         <button class="btn-ghost btn-small" id="btnAddEmbalagemManual" style="margin-top:8px;">+ Adicionar embalagem manualmente</button>
         <div id="manualEmbalagemForm" class="hidden" style="margin-top:12px;">
+          <p class="section-note" id="manualEmbFormTitulo" style="font-weight:700;color:var(--caramel-deep);font-size:13px;">Nova embalagem</p>
           <label>Nome da embalagem</label>
           <input type="text" id="manualEmbNome" placeholder="Ex: Pote 200ml">
           <div class="calc-box">
@@ -680,6 +713,10 @@
 </main>
 
 <div class="toast" id="toast"></div>
+<div class="undo-toast" id="undoToast">
+  <span id="undoToastMsg">Item excluído.</span>
+  <button id="btnUndo">Desfazer</button>
+</div>
 
 <nav class="tabbar">
   <button class="tab-btn active" data-tab="compras">
@@ -740,6 +777,32 @@ function showToast(msg){
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'), 2200);
 }
+
+let ultimaExclusao = null;
+let undoTimeoutId = null;
+
+function ofereceDesfazer(mensagem, arrayNome, item, index, aoRestaurar){
+  ultimaExclusao = { arrayNome, item, index, aoRestaurar };
+  document.getElementById('undoToastMsg').textContent = mensagem;
+  const el = document.getElementById('undoToast');
+  el.classList.add('show');
+  clearTimeout(undoTimeoutId);
+  undoTimeoutId = setTimeout(()=>{ el.classList.remove('show'); ultimaExclusao = null; }, 6000);
+}
+
+document.getElementById('btnUndo').addEventListener('click', ()=>{
+  if(!ultimaExclusao) return;
+  const { arrayNome, item, index, aoRestaurar } = ultimaExclusao;
+  const pos = Math.min(index, state[arrayNome].length);
+  state[arrayNome].splice(pos, 0, item);
+  document.getElementById('undoToast').classList.remove('show');
+  clearTimeout(undoTimeoutId);
+  ultimaExclusao = null;
+  saveState().then(()=>{
+    if(aoRestaurar) aoRestaurar();
+    showToast('Restaurado.');
+  });
+});
 
 function custoFixoReceita(r){
   if(r.horasForno!==undefined && r.horasForno!==null && r.horasForno!==''){
@@ -1174,10 +1237,16 @@ const TIPO_CONFIG = {
   }
 };
 
+let itemEditandoId = null;
+
 document.getElementById('btnAddItemManual').addEventListener('click', ()=>{
+  itemEditandoId = null;
+  document.getElementById('manualFormTitulo').textContent = 'Novo ingrediente';
+  document.getElementById('btnSalvarManual').textContent = 'Salvar item';
   document.getElementById('manualItemForm').classList.remove('hidden');
 });
 document.getElementById('btnCancelarManual').addEventListener('click', ()=>{
+  itemEditandoId = null;
   document.getElementById('manualItemForm').classList.add('hidden');
 });
 document.getElementById('btnCalcularManual').addEventListener('click', ()=>{
@@ -1190,6 +1259,23 @@ document.getElementById('btnCalcularManual').addEventListener('click', ()=>{
   if(precoTotal>0) document.getElementById('manualPreco').value = (precoTotal/totalUnidades).toFixed(4);
   showToast(`${totalUnidades} unidades no total.`);
 });
+
+function editarItem(tipo, id){
+  if(tipo==='embalagem'){ editarEmbalagem(id); return; }
+  const item = state.custosItens.find(i=>i.id===id);
+  if(!item) return;
+  itemEditandoId = id;
+  document.getElementById('manualFormTitulo').textContent = 'Editando: ' + item.nome;
+  document.getElementById('manualNome').value = item.nome;
+  document.getElementById('manualPreco').value = item.precoUnitario;
+  document.getElementById('manualEstoque').value = item.estoqueAtual||0;
+  document.getElementById('manualUnidadeBase').value = item.unidadeBase||'un';
+  document.getElementById('manualXicaraGramas').value = item.xicaraEmGramas||'';
+  document.getElementById('btnSalvarManual').textContent = 'Salvar alterações';
+  document.getElementById('manualItemForm').classList.remove('hidden');
+  document.getElementById('manualItemForm').scrollIntoView({behavior:'smooth'});
+}
+
 document.getElementById('btnSalvarManual').addEventListener('click', ()=>{
   const nome = document.getElementById('manualNome').value.trim();
   const preco = parseFloat(document.getElementById('manualPreco').value)||0;
@@ -1197,8 +1283,35 @@ document.getElementById('btnSalvarManual').addEventListener('click', ()=>{
   const unidadeBase = document.getElementById('manualUnidadeBase').value;
   const xicaraGramas = parseFloat(document.getElementById('manualXicaraGramas').value)||null;
   if(!nome){ showToast('Dê um nome para o item.'); return; }
+
+  if(itemEditandoId){
+    const item = state.custosItens.find(i=>i.id===itemEditandoId);
+    if(item){
+      const precoMudou = item.precoUnitario !== preco;
+      item.nome = nome;
+      item.precoUnitario = preco;
+      item.estoqueAtual = estoque;
+      item.unidadeBase = unidadeBase;
+      item.xicaraEmGramas = xicaraGramas;
+      if(precoMudou){
+        item.ultimaAtualizacao = new Date().toISOString();
+        if(!item.historico) item.historico = [];
+        item.historico.push({data:item.ultimaAtualizacao, preco});
+      }
+    }
+    itemEditandoId = null;
+    limparFormularioManual();
+    saveState().then(()=>{ renderItensBase('ingrediente'); renderSelectIngredienteItem(); renderSelectCaldaItem(); showToast('Ingrediente atualizado.'); });
+    return;
+  }
+
   const agora = new Date().toISOString();
   state.custosItens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, unidadeBase, xicaraEmGramas:xicaraGramas, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
+  limparFormularioManual();
+  saveState().then(()=>{ renderItensBase('ingrediente'); renderSelectIngredienteItem(); renderSelectCaldaItem(); showToast('Ingrediente adicionado.'); });
+});
+
+function limparFormularioManual(){
   document.getElementById('manualNome').value='';
   document.getElementById('manualPreco').value='';
   document.getElementById('manualEstoque').value='';
@@ -1207,13 +1320,18 @@ document.getElementById('btnSalvarManual').addEventListener('click', ()=>{
   document.getElementById('calcEmbalagens').value='';
   document.getElementById('calcUnidadesPorEmbalagem').value='';
   document.getElementById('manualItemForm').classList.add('hidden');
-  saveState().then(()=>{ renderItensBase('ingrediente'); renderSelectIngredienteItem(); renderSelectCaldaItem(); showToast('Ingrediente adicionado.'); });
-});
+}
+
+let embalagemEditandoId = null;
 
 document.getElementById('btnAddEmbalagemManual').addEventListener('click', ()=>{
+  embalagemEditandoId = null;
+  document.getElementById('manualEmbFormTitulo').textContent = 'Nova embalagem';
+  document.getElementById('btnSalvarEmbalagemManual').textContent = 'Salvar embalagem';
   document.getElementById('manualEmbalagemForm').classList.remove('hidden');
 });
 document.getElementById('btnCancelarEmbalagemManual').addEventListener('click', ()=>{
+  embalagemEditandoId = null;
   document.getElementById('manualEmbalagemForm').classList.add('hidden');
 });
 document.getElementById('btnCalcularEmbManual').addEventListener('click', ()=>{
@@ -1226,14 +1344,55 @@ document.getElementById('btnCalcularEmbManual').addEventListener('click', ()=>{
   if(precoTotal>0) document.getElementById('manualEmbPreco').value = (precoTotal/totalUnidades).toFixed(4);
   showToast(`${totalUnidades} unidades no total.`);
 });
+
+function editarEmbalagem(id){
+  const item = state.embalagens.find(i=>i.id===id);
+  if(!item) return;
+  embalagemEditandoId = id;
+  document.getElementById('manualEmbFormTitulo').textContent = 'Editando: ' + item.nome;
+  document.getElementById('manualEmbNome').value = item.nome;
+  document.getElementById('manualEmbPreco').value = item.precoUnitario;
+  document.getElementById('manualEmbEstoque').value = item.estoqueAtual||0;
+  document.getElementById('manualEmbIncluirPrecificacao').checked = item.incluirNaPrecificacao!==false;
+  document.getElementById('btnSalvarEmbalagemManual').textContent = 'Salvar alterações';
+  document.getElementById('manualEmbalagemForm').classList.remove('hidden');
+  document.getElementById('manualEmbalagemForm').scrollIntoView({behavior:'smooth'});
+}
+
 document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()=>{
   const nome = document.getElementById('manualEmbNome').value.trim();
   const preco = parseFloat(document.getElementById('manualEmbPreco').value)||0;
   const estoque = parseFloat(document.getElementById('manualEmbEstoque').value)||0;
   const incluirPrecificacao = document.getElementById('manualEmbIncluirPrecificacao').checked;
   if(!nome){ showToast('Dê um nome para a embalagem.'); return; }
+
+  if(embalagemEditandoId){
+    const item = state.embalagens.find(i=>i.id===embalagemEditandoId);
+    if(item){
+      const precoMudou = item.precoUnitario !== preco;
+      item.nome = nome;
+      item.precoUnitario = preco;
+      item.estoqueAtual = estoque;
+      item.incluirNaPrecificacao = incluirPrecificacao;
+      if(precoMudou){
+        item.ultimaAtualizacao = new Date().toISOString();
+        if(!item.historico) item.historico = [];
+        item.historico.push({data:item.ultimaAtualizacao, preco});
+      }
+    }
+    embalagemEditandoId = null;
+    limparFormularioEmbalagem();
+    saveState().then(()=>{ renderItensBase('embalagem'); showToast('Embalagem atualizada.'); });
+    return;
+  }
+
   const agora = new Date().toISOString();
   state.embalagens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, incluirNaPrecificacao:incluirPrecificacao, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
+  limparFormularioEmbalagem();
+  saveState().then(()=>{ renderItensBase('embalagem'); showToast('Embalagem adicionada.'); });
+});
+
+function limparFormularioEmbalagem(){
   document.getElementById('manualEmbNome').value='';
   document.getElementById('manualEmbPreco').value='';
   document.getElementById('manualEmbEstoque').value='';
@@ -1242,8 +1401,7 @@ document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()
   document.getElementById('calcEmbEmbalagens').value='';
   document.getElementById('calcEmbUnidadesPorEmbalagem').value='';
   document.getElementById('manualEmbalagemForm').classList.add('hidden');
-  saveState().then(()=>{ renderItensBase('embalagem'); showToast('Embalagem adicionada.'); });
-});
+}
 
 function renderItensBase(tipo){
   const cfg = TIPO_CONFIG[tipo];
@@ -1267,6 +1425,7 @@ function renderItensBase(tipo){
       </div>
       <div style="text-align:right;">
         <div class="mono item-name">${brl(item.precoUnitario)}</div>
+        <button class="btn-ghost btn-small" onclick="editarItem('${tipo}','${item.id}')" style="padding:3px 8px;font-size:11px;">editar</button>
         <button class="btn-danger-ghost" onclick="removerItem('${tipo}','${item.id}')">remover</button>
       </div>
     </div>
@@ -1346,12 +1505,19 @@ function ajustarUnidadeItem(id){
 }
 
 function removerItem(tipo, id){
-  if(tipo==='ingrediente'){
-    state.custosItens = state.custosItens.filter(i=>i.id!==id);
-  }else{
-    state.embalagens = state.embalagens.filter(i=>i.id!==id);
-  }
-  saveState().then(()=>{ renderItensBase(tipo); if(tipo==='ingrediente'){ renderSelectIngredienteItem(); renderSelectCaldaItem(); } });
+  const arrayNome = tipo==='ingrediente' ? 'custosItens' : 'embalagens';
+  const index = state[arrayNome].findIndex(i=>i.id===id);
+  if(index===-1) return;
+  const item = state[arrayNome][index];
+  state[arrayNome].splice(index,1);
+  saveState().then(()=>{
+    renderItensBase(tipo);
+    if(tipo==='ingrediente'){ renderSelectIngredienteItem(); renderSelectCaldaItem(); }
+    ofereceDesfazer(`"${item.nome}" excluído.`, arrayNome, item, index, ()=>{
+      renderItensBase(tipo);
+      if(tipo==='ingrediente'){ renderSelectIngredienteItem(); renderSelectCaldaItem(); }
+    });
+  });
 }
 
 // ---------- HISTÓRICO DE CUSTOS ----------
@@ -1806,9 +1972,17 @@ function renderReceitasList(){
   `;}).join('');
 }
 function removerReceita(id){
-  state.receitas = state.receitas.filter(r=>r.id!==id);
+  const index = state.receitas.findIndex(r=>r.id===id);
+  if(index===-1) return;
+  const receita = state.receitas[index];
+  state.receitas.splice(index,1);
   if(receitaEditandoId===id) cancelarEdicaoReceita();
-  saveState().then(()=>{ renderReceitasList(); renderPrecificacaoReceitas(); renderVendaReceitaSelect(); renderConsumoReceitaSelect(); });
+  saveState().then(()=>{
+    renderReceitasList(); renderPrecificacaoReceitas(); renderVendaReceitaSelect(); renderConsumoReceitaSelect();
+    ofereceDesfazer(`"${receita.nome}" excluída.`, 'receitas', receita, index, ()=>{
+      renderReceitasList(); renderPrecificacaoReceitas(); renderVendaReceitaSelect(); renderConsumoReceitaSelect();
+    });
+  });
 }
 
 // ---------- PRECIFICAÇÃO ----------
@@ -2023,8 +2197,14 @@ function renderConsumosList(){
   }).join('');
 }
 function removerConsumo(id){
-  state.consumos = state.consumos.filter(c=>c.id!==id);
-  saveState().then(()=>renderConsumosList());
+  const index = state.consumos.findIndex(c=>c.id===id);
+  if(index===-1) return;
+  const consumo = state.consumos[index];
+  state.consumos.splice(index,1);
+  saveState().then(()=>{
+    renderConsumosList();
+    ofereceDesfazer('Consumo excluído.', 'consumos', consumo, index, renderConsumosList);
+  });
 }
 
 // ---------- PAINEL ----------
