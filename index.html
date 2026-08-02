@@ -1660,15 +1660,16 @@ function renderSelectIngredienteItem(){
 }
 
 // ---------- CALDA / COMPONENTE DA RECEITA ----------
-const UNIDADES = ['g','kg','ml','L','un','xícara','colher sopa','colher chá','lata','pacote'];
+const UNIDADES = ['g','kg','ml','L','cm','m','un','xícara','colher sopa','colher chá','lata','pacote'];
 function unidadeOptions(selecionada){
   return UNIDADES.map(u=>`<option value="${u}" ${u===selecionada?'selected':''}>${u}</option>`).join('');
 }
 
 // ---------- CONVERSÃO DE UNIDADES ----------
-const FAMILIA_UNIDADE = { g:'massa', kg:'massa', ml:'volume', L:'volume', 'xícara':'volume', 'colher sopa':'volume', 'colher chá':'volume', un:'contagem', lata:'contagem', pacote:'contagem' };
+const FAMILIA_UNIDADE = { g:'massa', kg:'massa', ml:'volume', L:'volume', 'xícara':'volume', 'colher sopa':'volume', 'colher chá':'volume', cm:'comprimento', m:'comprimento', un:'contagem', lata:'contagem', pacote:'contagem' };
 const PARA_ML = { ml:1, L:1000, 'xícara':240, 'colher sopa':15, 'colher chá':5 };
 const PARA_G = { g:1, kg:1000 };
+const PARA_CM = { cm:1, m:100 };
 
 // Converte "qtd" de unidadeOrigem para unidadeDestino. Usa item.xicaraEmGramas como ponte
 // quando precisa cruzar de volume para massa (ou o contrário). Retorna null se não for possível converter.
@@ -1683,6 +1684,9 @@ function converterQuantidade(qtd, unidadeOrigem, unidadeDestino, item){
   }
   if(famO==='massa' && famD==='massa'){
     return qtd * PARA_G[unidadeOrigem] / PARA_G[unidadeDestino];
+  }
+  if(famO==='comprimento' && famD==='comprimento'){
+    return qtd * PARA_CM[unidadeOrigem] / PARA_CM[unidadeDestino];
   }
   // cruzando de família: só dá com a equivalência de xícara deste item específico
   if(item && item.xicaraEmGramas){
