@@ -1095,18 +1095,26 @@ document.getElementById('btnTakePhoto').addEventListener('click', ()=>{
   document.getElementById('photoInput').click();
 });
 
+let currentPhotoMediaType = 'image/jpeg';
+
 document.getElementById('photoInput').addEventListener('change', async (e)=>{
   const file = e.target.files[0];
   if(!file) return;
   const reader = new FileReader();
   reader.onload = async ()=>{
     currentPhotoBase64 = reader.result.split(',')[1];
-    const area = document.getElementById('photoArea');
-    area.innerHTML = `<img class="photo-preview" src="${reader.result}"><div class="loading-dots">Lendo a nota com IA...</div>`;
-    await lerNotaComIA(currentPhotoBase64, file.type || 'image/jpeg');
+    currentPhotoMediaType = file.type || 'image/jpeg';
+    iniciarLeitura(reader.result);
   };
   reader.readAsDataURL(file);
 });
+
+function iniciarLeitura(imgSrcParaMostrar){
+  const area = document.getElementById('photoArea');
+  const imgHtml = imgSrcParaMostrar ? `<img class="photo-preview" src="${imgSrcParaMostrar}">` : (area.querySelector('img') ? area.querySelector('img').outerHTML : '');
+  area.innerHTML = imgHtml + `<div class="loading-dots">Lendo a nota com IA...</div>`;
+  lerNotaComIA(currentPhotoBase64, currentPhotoMediaType);
+}
 
 const WORKER_URL = 'https://pudim-ia.lucaswahlbrink.workers.dev';
 
@@ -1139,7 +1147,9 @@ async function lerNotaComIA(base64, mediaType){
     renderExtractedItems();
   }catch(err){
     console.error(err);
-    area.innerHTML += `<div class="section-note">Não consegui ler a nota automaticamente (${err.message || 'erro desconhecido'}). Você pode adicionar os itens manualmente abaixo.</div>`;
+    area.innerHTML += `<div class="section-note">Não consegui ler a nota automaticamente (${err.message || 'erro desconhecido'}). Você pode adicionar os itens manualmente abaixo.</div>
+      <button class="btn-ghost btn-small" id="btnTentarNovamenteLeitura" style="margin-bottom:10px;">🔄 Tentar novamente com a mesma foto</button>`;
+    document.getElementById('btnTentarNovamenteLeitura').addEventListener('click', ()=>{ iniciarLeitura(null); });
   }
 }
 
