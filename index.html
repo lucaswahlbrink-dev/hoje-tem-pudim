@@ -519,10 +519,6 @@
           <input type="number" id="manualEmbPreco" class="mono" placeholder="0,00">
           <label>Estoque inicial</label>
           <input type="number" id="manualEmbEstoque" placeholder="0">
-          <label class="emb-check-label" style="margin-bottom:12px;">
-            <input type="checkbox" id="manualEmbIncluirPrecificacao" checked>
-            <span>Incluir esta embalagem nas opções de Precificação</span>
-          </label>
           <div class="row">
             <button class="btn-primary" id="btnSalvarEmbalagemManual">Salvar embalagem</button>
             <button class="btn-ghost" id="btnCancelarEmbalagemManual">Cancelar</button>
@@ -974,13 +970,11 @@ function embalagemArrayToMap(arr){
   return map;
 }
 
-function renderEmbalagemChecklist(containerId, mapaSelecionado, onChange, apenasPrecificaveis){
+function renderEmbalagemChecklist(containerId, mapaSelecionado, onChange){
   const el = document.getElementById(containerId);
-  const lista = apenasPrecificaveis ? state.embalagens.filter(e=>e.incluirNaPrecificacao!==false) : state.embalagens;
+  const lista = state.embalagens;
   if(lista.length===0){
-    el.innerHTML = apenasPrecificaveis
-      ? `<div class="section-note">Nenhuma embalagem marcada para entrar na Precificação. Ajuste em Compras → 🎁 Embalagens.</div>`
-      : `<div class="section-note">Nenhuma embalagem cadastrada ainda. Cadastre em Compras → 🎁 Embalagens.</div>`;
+    el.innerHTML = `<div class="section-note">Nenhuma embalagem cadastrada ainda. Cadastre em Compras → 🎁 Embalagens.</div>`;
     return;
   }
   el.innerHTML = lista.map(emb=>{
@@ -1356,7 +1350,7 @@ function renderExtractedItems(){
         if(!existente.historico) existente.historico = [];
         existente.historico.push({data: agora, preco: custoUnitario});
       }else{
-        arr.push({id:uid(), nome, precoUnitario:custoUnitario, estoqueAtual:qtd, unidadeBase: tipo==='ingrediente'?unidadeBase:'un', incluirNaPrecificacao:true, ultimaAtualizacao:agora, historico:[{data:agora, preco:custoUnitario}]});
+        arr.push({id:uid(), nome, precoUnitario:custoUnitario, estoqueAtual:qtd, unidadeBase: tipo==='ingrediente'?unidadeBase:'un', ultimaAtualizacao:agora, historico:[{data:agora, preco:custoUnitario}]});
       }
     });
     saveState().then(ok=>{
@@ -1502,7 +1496,6 @@ function editarEmbalagem(id){
   document.getElementById('manualEmbNome').value = item.nome;
   document.getElementById('manualEmbPreco').value = item.precoUnitario;
   document.getElementById('manualEmbEstoque').value = item.estoqueAtual||0;
-  document.getElementById('manualEmbIncluirPrecificacao').checked = item.incluirNaPrecificacao!==false;
   document.getElementById('btnSalvarEmbalagemManual').textContent = 'Salvar alterações';
   document.getElementById('manualEmbalagemForm').classList.remove('hidden');
   document.getElementById('manualEmbalagemForm').scrollIntoView({behavior:'smooth'});
@@ -1512,7 +1505,6 @@ document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()
   const nome = document.getElementById('manualEmbNome').value.trim();
   const preco = parseFloat(document.getElementById('manualEmbPreco').value)||0;
   const estoque = parseFloat(document.getElementById('manualEmbEstoque').value)||0;
-  const incluirPrecificacao = document.getElementById('manualEmbIncluirPrecificacao').checked;
   if(!nome){ showToast('Dê um nome para a embalagem.'); return; }
 
   if(embalagemEditandoId){
@@ -1522,7 +1514,6 @@ document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()
       item.nome = nome;
       item.precoUnitario = preco;
       item.estoqueAtual = estoque;
-      item.incluirNaPrecificacao = incluirPrecificacao;
       if(precoMudou){
         item.ultimaAtualizacao = new Date().toISOString();
         if(!item.historico) item.historico = [];
@@ -1536,7 +1527,7 @@ document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()
   }
 
   const agora = new Date().toISOString();
-  state.embalagens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, incluirNaPrecificacao:incluirPrecificacao, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
+  state.embalagens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
   limparFormularioEmbalagem();
   saveState().then(()=>{ renderItensBase('embalagem'); showToast('Embalagem adicionada.'); });
 });
@@ -1545,7 +1536,6 @@ function limparFormularioEmbalagem(){
   document.getElementById('manualEmbNome').value='';
   document.getElementById('manualEmbPreco').value='';
   document.getElementById('manualEmbEstoque').value='';
-  document.getElementById('manualEmbIncluirPrecificacao').checked = true;
   document.getElementById('calcEmbPrecoTotal').value='';
   document.getElementById('calcEmbEmbalagens').value='';
   document.getElementById('calcEmbUnidadesPorEmbalagem').value='';
@@ -1565,11 +1555,6 @@ function renderItensBase(tipo){
       <div>
         <div class="item-name">${escapeHtml(item.nome)}</div>
         <div class="item-sub">Atualizado em ${new Date(item.ultimaAtualizacao).toLocaleDateString('pt-BR')}${tipo==='ingrediente' ? ' · unidade: '+(item.unidadeBase||'un')+(item.xicaraEmGramas?' · 1 xícara = '+item.xicaraEmGramas+'g':'') : ''}</div>
-        ${tipo==='embalagem' ? `
-        <label class="emb-check-label" style="margin-top:4px;font-size:12px;">
-          <input type="checkbox" class="toggle-precificacao" data-id="${item.id}" ${item.incluirNaPrecificacao!==false?'checked':''}>
-          <span>Incluir na Precificação</span>
-        </label>` : ''}
         ${tipo==='ingrediente' ? `<button class="btn-ghost btn-small" onclick="ajustarUnidadeItem('${item.id}')" style="margin-top:4px;padding:3px 8px;font-size:11px;">⚙️ unidade</button>` : ''}
       </div>
       <div style="text-align:right;">
@@ -1579,17 +1564,6 @@ function renderItensBase(tipo){
       </div>
     </div>
   `).join('');
-  if(tipo==='embalagem'){
-    el.querySelectorAll('.toggle-precificacao').forEach(chk=>{
-      chk.addEventListener('change', ()=>{
-        const item = state.embalagens.find(i=>i.id===chk.dataset.id);
-        if(item){
-          item.incluirNaPrecificacao = chk.checked;
-          saveState().then(()=>showToast(chk.checked ? 'Incluída na Precificação.' : 'Removida da Precificação.'));
-        }
-      });
-    });
-  }
 }
 
 function estoqueMinimoItem(itemId){
@@ -2299,7 +2273,7 @@ function removerEmbalagemPrecifTemp(idx){
 
 function renderSelectEmbalagemPrecif(){
   const sel = document.getElementById('selectEmbalagemPrecif');
-  const disponiveis = state.embalagens.filter(e=>e.incluirNaPrecificacao!==false);
+  const disponiveis = state.embalagens;
   if(disponiveis.length===0){
     sel.innerHTML = `<option value="">Nenhuma embalagem disponível</option>`;
     return;
