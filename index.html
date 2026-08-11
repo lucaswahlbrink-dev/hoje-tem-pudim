@@ -440,6 +440,13 @@
     </div>
 
     <div class="card">
+      <h2>🤖 Revisar unidades dos itens já cadastrados</h2>
+      <p class="section-note">Varre todos os ingredientes de uma vez e sugere a unidade certa de cada um baseado no nome, sem precisar caçar item por item.</p>
+      <button class="btn-secondary" id="btnRevisarUnidadesLote">Verificar com IA</button>
+      <div id="resultadoRevisaoUnidades" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="card">
       <h2>Ingredientes</h2>
       <p class="section-note">Base atual, estoque e histórico de preços dos ingredientes.</p>
       <div class="sheet-tabs">
@@ -1393,7 +1400,7 @@ async function lerNotaComIA(base64, mediaType){
     raw = raw.replace(/```json|```/g,'').trim();
     let parsed = [];
     try{ parsed = JSON.parse(raw); }catch(err){ parsed = []; }
-    extractedItems = parsed.map(p=>({id:uid(), nome:p.nome||'', quantidade:p.quantidade||1, valor:p.valor||0, tipo:'ingrediente'}));
+    extractedItems = parsed.map(p=>({id:uid(), nome:p.nome||'', quantidade:p.quantidade||1, valor:p.valor||0, tipo:'ingrediente', unidadeSugerida: UNIDADES.includes(p.unidadeSugerida) ? p.unidadeSugerida : 'un'}));
     renderExtractedItems();
   }catch(err){
     console.error(err);
@@ -1486,15 +1493,32 @@ function renderRevisaoPdf(){
     area.innerHTML = `<div class="section-note">Nenhuma receita identificada nesse PDF.</div>`;
     return;
   }
-  area.innerHTML = `<div class="section-note" style="margin-top:10px;">${receitasExtraidasPdf.length} receita(s) encontrada(s). Desmarque as que não quiser importar.</div>` +
+  area.innerHTML = `<div class="section-note" style="margin-top:10px;">${receitasExtraidasPdf.length} receita(s) encontrada(s). Confira e corrija os ingredientes antes de importar. Desmarque as que não quiser importar.</div>` +
     receitasExtraidasPdf.map(r=>`
     <div class="receita-card">
-      <label class="emb-check-label" style="margin-bottom:4px;">
+      <label class="emb-check-label" style="margin-bottom:8px;">
         <input type="checkbox" class="pdf-receita-check" data-id="${r.id}" ${r.incluir?'checked':''}>
-        <span><strong>${escapeHtml(r.nome)}</strong></span>
+        <span><strong>Importar esta receita</strong></span>
       </label>
-      <p class="item-sub" style="margin-left:28px;">${r.ingredientes.length} ingredientes · entra com formato "Fatia" rendendo ${r.rendimentoFatias} (edite depois se quiser outros formatos)</p>
-      <p class="item-sub" style="margin-left:28px;">${r.ingredientes.map(i=>escapeHtml(i.nome)+' ('+i.quantidade+i.unidade+')').join(', ')}</p>
+      <label>Nome da receita</label>
+      <input type="text" class="pdf-receita-nome" data-id="${r.id}" value="${escapeHtml(r.nome)}">
+      <label>Rendimento (formato "Fatia")</label>
+      <input type="number" class="pdf-receita-rendimento mono" data-id="${r.id}" value="${r.rendimentoFatias}" style="max-width:120px;">
+      <div class="divider-label" style="margin-top:10px;">Ingredientes</div>
+      <table class="tabela-ingredientes">
+        <thead><tr><th>Item</th><th class="num">Qtd.</th><th class="num">Unidade</th><th></th></tr></thead>
+        <tbody>
+          ${r.ingredientes.map((ing,idx)=>`
+            <tr>
+              <td><input type="text" class="pdf-ing-nome" data-id="${r.id}" data-idx="${idx}" value="${escapeHtml(ing.nome)}"></td>
+              <td class="num"><input type="number" class="pdf-ing-qtd mono" data-id="${r.id}" data-idx="${idx}" value="${ing.quantidade}" style="width:64px;"></td>
+              <td class="num"><select class="pdf-ing-unidade unidade-select" data-id="${r.id}" data-idx="${idx}">${unidadeOptions(ing.unidade)}</select></td>
+              <td class="acoes"><button class="btn-danger-ghost" onclick="removerIngredientePdf('${r.id}',${idx})">remover</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <button class="btn-ghost btn-small" onclick="adicionarIngredientePdf('${r.id}')">+ adicionar ingrediente</button>
     </div>
   `).join('') +
   `<button class="btn-primary" id="btnConfirmarImportPdf" style="margin-top:10px;">Importar selecionadas</button>`;
@@ -1505,7 +1529,49 @@ function renderRevisaoPdf(){
       if(r) r.incluir = chk.checked;
     });
   });
-  document.getElementById('btnConfirmarImportPdf').addEventListener('click', importarReceitasSelecionadasPdf);
+  document.getElementById('btnConfirmarImportPdf').addEventListener('click', ()=>{
+    sincronizarEdicoesPdf();
+    importarReceitasSelecionadasPdf();
+  });
+}
+
+// Lê tudo que está nos campos da tela (nome, rendimento, ingredientes) e grava de volta em receitasExtraidasPdf
+function sincronizarEdicoesPdf(){
+  document.querySelectorAll('.pdf-receita-nome').forEach(inp=>{
+    const r = receitasExtraidasPdf.find(x=>x.id===inp.dataset.id);
+    if(r) r.nome = inp.value.trim() || r.nome;
+  });
+  document.querySelectorAll('.pdf-receita-rendimento').forEach(inp=>{
+    const r = receitasExtraidasPdf.find(x=>x.id===inp.dataset.id);
+    if(r) r.rendimentoFatias = parseInt(inp.value)||r.rendimentoFatias;
+  });
+  document.querySelectorAll('.pdf-ing-nome').forEach(inp=>{
+    const r = receitasExtraidasPdf.find(x=>x.id===inp.dataset.id);
+    if(r && r.ingredientes[inp.dataset.idx]) r.ingredientes[inp.dataset.idx].nome = inp.value.trim();
+  });
+  document.querySelectorAll('.pdf-ing-qtd').forEach(inp=>{
+    const r = receitasExtraidasPdf.find(x=>x.id===inp.dataset.id);
+    if(r && r.ingredientes[inp.dataset.idx]) r.ingredientes[inp.dataset.idx].quantidade = parseFloat(inp.value)||1;
+  });
+  document.querySelectorAll('.pdf-ing-unidade').forEach(inp=>{
+    const r = receitasExtraidasPdf.find(x=>x.id===inp.dataset.id);
+    if(r && r.ingredientes[inp.dataset.idx]) r.ingredientes[inp.dataset.idx].unidade = inp.value;
+  });
+}
+
+function adicionarIngredientePdf(receitaId){
+  sincronizarEdicoesPdf();
+  const r = receitasExtraidasPdf.find(x=>x.id===receitaId);
+  if(!r) return;
+  r.ingredientes.push({nome:'Novo ingrediente', quantidade:1, unidade:'un'});
+  renderRevisaoPdf();
+}
+function removerIngredientePdf(receitaId, idx){
+  sincronizarEdicoesPdf();
+  const r = receitasExtraidasPdf.find(x=>x.id===receitaId);
+  if(!r) return;
+  r.ingredientes.splice(idx,1);
+  renderRevisaoPdf();
 }
 
 function importarReceitasSelecionadasPdf(){
@@ -1586,7 +1652,7 @@ function renderExtractedItems(){
     const tipoInicial = row.querySelector('.ex-tipo').value;
     const sugestao = sugerirItemExistente(item.nome, TIPO_CONFIG[tipoInicial].arr());
     renderVincularSelect(row, tipoInicial, sugestao ? sugestao.id : null);
-    row.querySelector('.ex-unidade').innerHTML = unidadeOptions('un');
+    row.querySelector('.ex-unidade').innerHTML = unidadeOptions(item.unidadeSugerida||'un');
     row.querySelector('.ex-tipo').addEventListener('change', ()=>{
       const novoTipo = row.querySelector('.ex-tipo').value;
       const nomeAtual = row.querySelector('.ex-nome').value;
@@ -2256,6 +2322,95 @@ function aplicarSugestaoIA(receitaId, idx, quantidadeSugerida){
     if(receitaSelecionadaId===receitaId){
       atualizarTotaisPrecificacao();
     }
+    verificarTodasReceitas();
+  });
+}
+
+// ---------- REVISÃO EM LOTE DE UNIDADES (itens já cadastrados) ----------
+let sugestoesLoteAtuais = [];
+
+document.getElementById('btnRevisarUnidadesLote').addEventListener('click', async ()=>{
+  const btn = document.getElementById('btnRevisarUnidadesLote');
+  const el = document.getElementById('resultadoRevisaoUnidades');
+  if(state.custosItens.length===0){ showToast('Nenhum ingrediente cadastrado ainda.'); return; }
+  btn.disabled = true;
+  btn.textContent = 'Verificando...';
+  el.innerHTML = `<div class="loading-dots">Perguntando à IA a unidade certa de cada item...</div>`;
+  try{
+    const itensParaEnviar = state.custosItens.map(i=>({nome:i.nome, unidadeBaseAtual:i.unidadeBase||'un'}));
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ modo: 'sugestao-unidade-lote', itens: itensParaEnviar })
+    });
+    const data = await response.json();
+    if(data.error) throw new Error(typeof data.error==='string' ? data.error : (data.error.message||'erro desconhecido'));
+    const candidate = (data.candidates && data.candidates[0]) || null;
+    let raw = candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]
+      ? candidate.content.parts[0].text
+      : '[]';
+    raw = raw.replace(/```json|```/g,'').trim();
+    let sugestoes = [];
+    try{ sugestoes = JSON.parse(raw); }catch(e){ sugestoes = []; }
+
+    sugestoesLoteAtuais = sugestoes
+      .map(s=>{
+        const item = state.custosItens[s.indice];
+        if(!item) return null;
+        const atual = item.unidadeBase || 'un';
+        if(!UNIDADES.includes(s.unidadeSugerida) || s.unidadeSugerida===atual) return null;
+        if(s.fatorConversao===null || s.fatorConversao===undefined || s.fatorConversao<=0) return null;
+        return { itemId:item.id, itemNome:item.nome, unidadeAtual:atual, unidadeSugerida:s.unidadeSugerida, fatorConversao:s.fatorConversao, precoAtual:item.precoUnitario };
+      })
+      .filter(Boolean);
+
+    renderRevisaoUnidadesLote();
+  }catch(err){
+    el.innerHTML = `<div class="section-note">Não consegui verificar agora (${err.message||'erro'}).</div>`;
+  }
+  btn.disabled = false;
+  btn.textContent = 'Verificar com IA';
+});
+
+function renderRevisaoUnidadesLote(){
+  const el = document.getElementById('resultadoRevisaoUnidades');
+  if(sugestoesLoteAtuais.length===0){
+    el.innerHTML = `<div class="empty-state"><span class="drip-icon">✅</span><strong>Tudo certo!</strong><span>Nenhuma unidade diferente do que já está configurado.</span></div>`;
+    return;
+  }
+  el.innerHTML = `<p class="section-note">${sugestoesLoteAtuais.length} item(ns) com sugestão diferente do atual. Desmarque o que não quiser aplicar.</p>` +
+    sugestoesLoteAtuais.map((s,idx)=>{
+      const precoNovo = s.precoAtual / s.fatorConversao;
+      return `
+      <label class="emb-check-label" style="align-items:flex-start;margin-bottom:10px;">
+        <input type="checkbox" class="lote-unidade-check" data-idx="${idx}" checked>
+        <span>
+          <strong>${escapeHtml(s.itemNome)}</strong><br>
+          <span class="item-sub">${s.unidadeAtual} → ${s.unidadeSugerida} · preço vira ${brl(precoNovo)}/${s.unidadeSugerida} (era ${brl(s.precoAtual)}/${s.unidadeAtual})</span>
+        </span>
+      </label>`;
+    }).join('') +
+    `<button class="btn-primary" id="btnAplicarLoteUnidades" style="margin-top:6px;">Aplicar selecionadas</button>`;
+
+  document.getElementById('btnAplicarLoteUnidades').addEventListener('click', aplicarLoteUnidades);
+}
+
+function aplicarLoteUnidades(){
+  const marcados = Array.from(document.querySelectorAll('.lote-unidade-check:checked')).map(chk=>parseInt(chk.dataset.idx));
+  if(marcados.length===0){ showToast('Nenhum item selecionado.'); return; }
+  marcados.forEach(idx=>{
+    const s = sugestoesLoteAtuais[idx];
+    const item = state.custosItens.find(i=>i.id===s.itemId);
+    if(item){
+      item.precoUnitario = item.precoUnitario / s.fatorConversao;
+      item.unidadeBase = s.unidadeSugerida;
+    }
+  });
+  saveState().then(()=>{
+    showToast(`${marcados.length} item(ns) atualizado(s).`);
+    sugestoesLoteAtuais = [];
+    document.getElementById('resultadoRevisaoUnidades').innerHTML = '';
+    renderItensBase('ingrediente');
     verificarTodasReceitas();
   });
 }
