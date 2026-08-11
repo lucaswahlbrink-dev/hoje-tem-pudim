@@ -326,7 +326,9 @@
     .sidebar-toggle{
       background:none; border:none; color:#fff; opacity:.8;
       align-self:flex-end; padding:8px; margin-bottom:12px; flex:none;
+      display:flex; align-items:center; justify-content:center;
     }
+    .sidebar-toggle svg{ width:22px; height:22px; }
     .sidebar.collapsed .sidebar-toggle{ align-self:center; }
     .sidebar .sidebar-btn{
       display:flex; align-items:center; gap:12px;
@@ -341,7 +343,7 @@
 
     nav.tabbar{ display:none; }
     header.app-header{ margin-left:220px; padding:22px 28px 0 28px; max-width:none; transition:margin-left .2s ease; }
-    main{ margin-left:220px; max-width:900px; transition:margin-left .2s ease; }
+    main{ margin-left:220px; max-width:none; padding-right:32px; transition:margin-left .2s ease; }
     body.sidebar-collapsed header.app-header{ margin-left:64px; }
     body.sidebar-collapsed main{ margin-left:64px; }
   }
