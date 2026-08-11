@@ -146,6 +146,9 @@
     line-height:1.5;
   }
   .aviso-conversao strong{display:block;margin-bottom:3px;}
+  .aviso-item-ia{margin-bottom:10px;}
+  .aviso-item-ia .btn-ghost{margin-top:2px;}
+  .sugestao-ia-area:not(:empty){margin-top:6px;}
 
   .detalhe-custo{ margin:-4px 0 10px 0; }
   .detalhe-linha{ display:flex; justify-content:space-between; font-size:12px; color:var(--muted); padding:3px 0 3px 12px; }
@@ -2129,16 +2132,24 @@ function toggleAccordion(headerId, contentId){
 toggleAccordion('toggleDetalheIngredientes', 'precifDetalheIngredientes');
 toggleAccordion('toggleDetalheComponentes', 'precifDetalheComponentes');
 
-function verificarConversoesIncertas(listaIngredientes, arrayItens, prefixo){
+function verificarConversoesIncertas(listaIngredientes, arrayItens, prefixo, origem){
   const avisos = [];
-  (listaIngredientes||[]).forEach(ing=>{
+  (listaIngredientes||[]).forEach((ing, idx)=>{
     const item = arrayItens.find(i=>i.id===ing.itemId);
     if(!item || !ing.unidade) return;
     const baseItem = item.unidadeBase || 'un';
     if(ing.unidade===baseItem) return;
     const convertido = converterQuantidade(ing.quantidade, ing.unidade, baseItem, item);
     if(convertido===null){
-      avisos.push(`${prefixo}${item.nome}: não sei converter "${ing.unidade}" para "${baseItem}"${item.unidadeBase?' (falta a equivalência de xícara em ⚙️ unidade)':' (esse item nunca teve uma unidade configurada, toque em ⚙️ unidade para definir)'}. Calculando ${ing.quantidade} como se já estivesse em ${baseItem}, o que pode estar errado.`);
+      avisos.push({
+        mensagem: `${prefixo}${item.nome}: não sei converter "${ing.unidade}" para "${baseItem}"${item.unidadeBase?' (falta a equivalência de xícara em ⚙️ unidade)':' (esse item nunca teve uma unidade configurada, toque em ⚙️ unidade para definir)'}. Calculando ${ing.quantidade} como se já estivesse em ${baseItem}, o que pode estar errado.`,
+        itemNome: item.nome,
+        quantidade: ing.quantidade,
+        unidadeOrigem: ing.unidade,
+        unidadeBase: baseItem,
+        idx,
+        origem: origem||'direto'
+      });
     }
   });
   return avisos;
@@ -2149,10 +2160,10 @@ let novaCaldaIngredientesTemp = [];
 function verificarTodasReceitas(){
   const resultados = [];
   state.receitas.forEach(r=>{
-    let avisos = verificarConversoesIncertas(r.ingredientes, state.custosItens, '');
+    let avisos = verificarConversoesIncertas(r.ingredientes, state.custosItens, '', 'direto');
     if(r.calda && r.calda.componenteId){
       const comp = state.componentes.find(c=>c.id===r.calda.componenteId);
-      if(comp) avisos = avisos.concat(verificarConversoesIncertas(comp.ingredientes, state.custosItens, '(na calda) '));
+      if(comp) avisos = avisos.concat(verificarConversoesIncertas(comp.ingredientes, state.custosItens, '(na calda) ', 'calda'));
     }
     if(avisos.length>0){
       resultados.push({receitaId:r.id, receitaNome:r.nome, avisos});
@@ -2168,12 +2179,86 @@ function verificarTodasReceitas(){
     resultados.map(res=>`
     <div class="receita-card">
       <h3>${escapeHtml(res.receitaNome)}</h3>
-      ${res.avisos.map(a=>`<p class="item-sub">${escapeHtml(a)}</p>`).join('')}
+      ${res.avisos.map(a=>`
+        <div class="aviso-item-ia">
+          <p class="item-sub">${escapeHtml(a.mensagem)}</p>
+          ${a.origem==='direto' ? `
+          <button class="btn-ghost btn-small" onclick="pedirSugestaoIA(this,'${res.receitaId}',${a.idx})">🤖 Perguntar à IA</button>
+          <div class="sugestao-ia-area"></div>` : `<p class="item-sub">(ingredientes da calda: ajuste direto na calda, por enquanto a sugestão por IA só olha ingredientes diretos)</p>`}
+        </div>
+      `).join('')}
       <button class="btn-ghost btn-small" onclick="editarReceita('${res.receitaId}')">editar esta receita</button>
     </div>
   `).join('');
 }
 document.getElementById('btnVerificarConversoes').addEventListener('click', verificarTodasReceitas);
+
+async function pedirSugestaoIA(botao, receitaId, idx){
+  const r = state.receitas.find(x=>x.id===receitaId);
+  if(!r) return;
+  const ing = r.ingredientes[idx];
+  if(!ing) return;
+  const item = state.custosItens.find(i=>i.id===ing.itemId);
+  if(!item) return;
+  const areaResultado = botao.nextElementSibling;
+  botao.disabled = true;
+  const textoOriginal = botao.textContent;
+  botao.textContent = 'Pensando...';
+  try{
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        modo: 'sugestao-unidade',
+        itemNome: item.nome,
+        itemUnidadeBase: item.unidadeBase || 'un',
+        receitaQuantidade: ing.quantidade,
+        receitaUnidade: ing.unidade
+      })
+    });
+    const data = await response.json();
+    if(data.error) throw new Error(typeof data.error==='string' ? data.error : (data.error.message||'erro desconhecido'));
+    const candidate = (data.candidates && data.candidates[0]) || null;
+    let raw = candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]
+      ? candidate.content.parts[0].text
+      : '{}';
+    raw = raw.replace(/```json|```/g,'').trim();
+    let sugestao = {};
+    try{ sugestao = JSON.parse(raw); }catch(e){ sugestao = {}; }
+    if(sugestao.quantidadeSugerida!==null && sugestao.quantidadeSugerida!==undefined){
+      areaResultado.innerHTML = `<div class="section-note">💡 IA sugere: ${sugestao.quantidadeSugerida} ${escapeHtml(item.unidadeBase||'un')} — ${escapeHtml(sugestao.explicacao||'')}</div>
+        <button class="btn-secondary btn-small" onclick="aplicarSugestaoIA('${receitaId}',${idx},${sugestao.quantidadeSugerida})">Aplicar essa sugestão</button>`;
+    }else{
+      areaResultado.innerHTML = `<div class="section-note">A IA não conseguiu sugerir com confiança: ${escapeHtml(sugestao.explicacao||'sem explicação')}</div>`;
+    }
+  }catch(err){
+    areaResultado.innerHTML = `<div class="section-note">Não consegui consultar a IA agora (${err.message||'erro'}).</div>`;
+  }
+  botao.disabled = false;
+  botao.textContent = textoOriginal;
+}
+
+function aplicarSugestaoIA(receitaId, idx, quantidadeSugerida){
+  const r = state.receitas.find(x=>x.id===receitaId);
+  if(!r) return;
+  const ing = r.ingredientes[idx];
+  if(!ing) return;
+  const item = state.custosItens.find(i=>i.id===ing.itemId);
+  if(!item) return;
+  ing.quantidade = quantidadeSugerida;
+  ing.unidade = item.unidadeBase || 'un';
+  saveState().then(()=>{
+    showToast('Ingrediente atualizado.');
+    if(receitaEditandoId===receitaId){
+      novaReceitaIngredientesTemp = r.ingredientes.map(i=>({...i}));
+      renderNovaReceitaIngredientes();
+    }
+    if(receitaSelecionadaId===receitaId){
+      atualizarTotaisPrecificacao();
+    }
+    verificarTodasReceitas();
+  });
+}
 let receitaCaldaAtual = null; // {componenteId, quantidade, unidade} ou null
 
 document.getElementById('selectCaldaUnidade').innerHTML = unidadeOptions();
@@ -2714,14 +2799,19 @@ function atualizarTotaisPrecificacao(){
   const custoFixo = custoFixoReceita(r);
   const custoTotal = custoItens + custoComponentes + custoEmbalagem + custoFixo;
 
-  let avisos = verificarConversoesIncertas(r.ingredientes, state.custosItens, '');
+  let avisos = verificarConversoesIncertas(r.ingredientes, state.custosItens, '', 'direto');
   if(r.calda && r.calda.componenteId){
     const comp = state.componentes.find(c=>c.id===r.calda.componenteId);
-    if(comp) avisos = avisos.concat(verificarConversoesIncertas(comp.ingredientes, state.custosItens, '(na calda) '));
+    if(comp) avisos = avisos.concat(verificarConversoesIncertas(comp.ingredientes, state.custosItens, '(na calda) ', 'calda'));
   }
   const avisosEl = document.getElementById('precifAvisos');
   avisosEl.innerHTML = avisos.length>0
-    ? `<div class="aviso-conversao"><strong>⚠️ Confira antes de confiar no número:</strong>${avisos.map(a=>`<div>${escapeHtml(a)}</div>`).join('')}</div>`
+    ? `<div class="aviso-conversao"><strong>⚠️ Confira antes de confiar no número:</strong>${avisos.map(a=>`
+        <div class="aviso-item-ia">
+          <div>${escapeHtml(a.mensagem)}</div>
+          ${a.origem==='direto' ? `<button class="btn-ghost btn-small" onclick="pedirSugestaoIA(this,'${r.id}',${a.idx})">🤖 Perguntar à IA</button><div class="sugestao-ia-area"></div>` : ''}
+        </div>
+      `).join('')}</div>`
     : '';
 
   renderDetalheCusto('precifDetalheIngredientes', r.ingredientes, state.custosItens);
