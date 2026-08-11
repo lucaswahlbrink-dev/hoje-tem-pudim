@@ -121,6 +121,18 @@
   button:disabled{opacity:.5;cursor:not-allowed;}
 
   .item-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);gap:8px;}
+
+  .drag-handle{
+    cursor:grab; touch-action:none; user-select:none;
+    color:var(--muted); font-size:20px; line-height:1;
+    padding:6px 8px; flex:none; letter-spacing:-2px;
+  }
+  .draggable-row{ display:flex; align-items:center; gap:2px; background:var(--surface); }
+  .draggable-row.dragging{
+    opacity:0.92; box-shadow:0 8px 20px rgba(0,0,0,0.18);
+    position:relative; z-index:80; border-radius:10px;
+  }
+  .draggable-row-conteudo{ flex:1; min-width:0; }
   .item-row:last-child{border-bottom:none;}
   .item-name{font-weight:600;font-size:14px;}
   .item-sub{font-size:12px;color:var(--muted);}
@@ -614,6 +626,8 @@
           <input type="number" id="manualEmbPreco" class="mono" placeholder="0,00">
           <label>Estoque inicial</label>
           <input type="number" id="manualEmbEstoque" placeholder="0">
+          <label>Capacidade em ml (só para potes/embalagens que levam creme líquido, ex: 120)</label>
+          <input type="number" id="manualEmbCapacidade" class="mono" placeholder="Deixe em branco se não se aplica">
           <div class="row">
             <button class="btn-primary" id="btnSalvarEmbalagemManual">Salvar embalagem</button>
             <button class="btn-ghost" id="btnCancelarEmbalagemManual">Cancelar</button>
@@ -672,13 +686,18 @@
 
       <div class="divider-label">Formatos de venda desta receita</div>
       <p class="section-note">O mesmo lote pode virar fatias, potes de tamanhos diferentes, etc. Cada formato tem seu próprio rendimento (quantas unidades esse lote inteiro rende, se dividido só nesse formato).</p>
+      <label>Rendimento da mistura pronta (ml)</label>
+      <input type="number" id="novaReceitaRendimentoMistura" class="mono" placeholder="Ex: 1000 (a mistura toda rende 1 litro de creme)">
+      <p class="section-note" style="margin-top:-8px;">Preenchendo isso, formatos vinculados a um pote com capacidade calculam o rendimento sozinhos.</p>
       <div id="novaReceitaFormatos"></div>
       <button class="btn-ghost btn-small" id="btnAbrirAddFormato" style="margin-bottom:10px;">+ Adicionar formato</button>
       <div id="formatoAddArea" class="hidden">
-        <div class="row" style="margin-bottom:10px;">
-          <input type="text" id="inputFormatoNome" placeholder="Ex: Pote 120ml">
-          <input type="number" id="inputFormatoRendimento" placeholder="Rende quantas un." class="mono">
-        </div>
+        <label>Nome do formato</label>
+        <input type="text" id="inputFormatoNome" placeholder="Ex: Pote 120ml">
+        <label>Vincular a uma embalagem (opcional, calcula o rendimento sozinho)</label>
+        <select id="selectFormatoEmbalagem"></select>
+        <label>Rende quantas un.</label>
+        <input type="number" id="inputFormatoRendimento" placeholder="Rende quantas un." class="mono">
         <div class="row" style="margin-bottom:10px;">
           <button class="btn-secondary" id="btnConfirmarFormato">OK</button>
           <button class="btn-ghost" id="btnFecharAddFormato">Cancelar</button>
@@ -1005,16 +1024,18 @@ function renderNovaReceitaFormatos(){
   el.innerHTML = `<table class="tabela-ingredientes">
     <thead><tr><th>Formato</th><th class="num">Rende</th><th></th></tr></thead>
     <tbody>
-      ${novaReceitaFormatosTemp.map((f,idx)=>`
+      ${novaReceitaFormatosTemp.map((f,idx)=>{
+        const emb = f.embalagemVinculadaId ? state.embalagens.find(e=>e.id===f.embalagemVinculadaId) : null;
+        return `
         <tr>
-          <td>${escapeHtml(f.nome)}</td>
+          <td>${escapeHtml(f.nome)}${emb?`<div class="item-sub">🎁 ${escapeHtml(emb.nome)}</div>`:''}</td>
           <td class="num mono">${f.rendimento} un</td>
           <td class="acoes">
             <button class="btn-ghost" onclick="editarFormatoTemp(${idx})">editar</button>
             <button class="btn-danger-ghost" onclick="removerFormatoTemp(${idx})">remover</button>
           </td>
         </tr>
-      `).join('')}
+      `;}).join('')}
     </tbody>
   </table>`;
 }
@@ -1028,14 +1049,35 @@ function editarFormatoTemp(idx){
   editandoFormatoIdx = idx;
   document.getElementById('inputFormatoNome').value = f.nome;
   document.getElementById('inputFormatoRendimento').value = f.rendimento;
+  renderSelectFormatoEmbalagem();
+  document.getElementById('selectFormatoEmbalagem').value = f.embalagemVinculadaId||'';
   document.getElementById('btnConfirmarFormato').textContent = 'Salvar alteração';
   document.getElementById('formatoAddArea').classList.remove('hidden');
 }
+function renderSelectFormatoEmbalagem(){
+  const sel = document.getElementById('selectFormatoEmbalagem');
+  const comCapacidade = state.embalagens.filter(e=>e.capacidadeMl>0);
+  sel.innerHTML = `<option value="">Nenhuma (digitar rendimento na mão)</option>` +
+    comCapacidade.map(e=>`<option value="${e.id}">${escapeHtml(e.nome)} (${e.capacidadeMl}ml)</option>`).join('');
+}
+document.getElementById('selectFormatoEmbalagem').addEventListener('change', ()=>{
+  const embId = document.getElementById('selectFormatoEmbalagem').value;
+  if(!embId) return;
+  const emb = state.embalagens.find(e=>e.id===embId);
+  const rendimentoMistura = parseFloat(document.getElementById('novaReceitaRendimentoMistura').value)||0;
+  if(emb && emb.capacidadeMl>0 && rendimentoMistura>0){
+    document.getElementById('inputFormatoRendimento').value = Math.floor(rendimentoMistura/emb.capacidadeMl);
+  }else if(!rendimentoMistura){
+    showToast('Preencha o rendimento da mistura (em ml) primeiro, para calcular sozinho.');
+  }
+});
 document.getElementById('btnAbrirAddFormato').addEventListener('click', ()=>{
   editandoFormatoIdx = null;
   document.getElementById('btnConfirmarFormato').textContent = 'OK';
   document.getElementById('inputFormatoNome').value = '';
   document.getElementById('inputFormatoRendimento').value = '';
+  renderSelectFormatoEmbalagem();
+  document.getElementById('selectFormatoEmbalagem').value = '';
   document.getElementById('formatoAddArea').classList.remove('hidden');
 });
 document.getElementById('btnFecharAddFormato').addEventListener('click', ()=>{
@@ -1046,15 +1088,16 @@ document.getElementById('btnFecharAddFormato').addEventListener('click', ()=>{
 document.getElementById('btnConfirmarFormato').addEventListener('click', ()=>{
   const nome = document.getElementById('inputFormatoNome').value.trim();
   const rendimento = parseFloat(document.getElementById('inputFormatoRendimento').value);
+  const embalagemVinculadaId = document.getElementById('selectFormatoEmbalagem').value || null;
   if(!nome || !rendimento){ showToast('Dê um nome e o rendimento do formato.'); return; }
   if(editandoFormatoIdx!==null){
     const idExistente = novaReceitaFormatosTemp[editandoFormatoIdx].id;
     const precoExistente = novaReceitaFormatosTemp[editandoFormatoIdx].precoVenda||0;
-    novaReceitaFormatosTemp[editandoFormatoIdx] = {id:idExistente, nome, rendimento, precoVenda:precoExistente};
+    novaReceitaFormatosTemp[editandoFormatoIdx] = {id:idExistente, nome, rendimento, precoVenda:precoExistente, embalagemVinculadaId};
     editandoFormatoIdx = null;
     document.getElementById('btnConfirmarFormato').textContent = 'OK';
   }else{
-    novaReceitaFormatosTemp.push({id:uid(), nome, rendimento, precoVenda:0});
+    novaReceitaFormatosTemp.push({id:uid(), nome, rendimento, precoVenda:0, embalagemVinculadaId});
   }
   document.getElementById('formatoAddArea').classList.add('hidden');
   renderNovaReceitaFormatos();
@@ -1781,6 +1824,57 @@ function renderExtractedItems(){
 }
 
 // ---------- COMPRAS: ITEM MANUAL ----------
+// ---------- REORDENAR POR ARRASTAR (genérico, funciona com dedo e mouse) ----------
+// containerEl: elemento pai; rowSelector: seletor das linhas arrastáveis (precisam ter data-id);
+// arr: o array de verdade (será reordenado no lugar); onSalvar: chamado depois de soltar.
+function habilitarReordenar(containerEl, rowSelector, arr, onSalvar){
+  if(!containerEl) return;
+  containerEl.querySelectorAll(rowSelector+' .drag-handle').forEach(handle=>{
+    handle.addEventListener('pointerdown', (e)=>{
+      const row = handle.closest(rowSelector);
+      if(!row) return;
+      e.preventDefault();
+      row.classList.add('dragging');
+      try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+
+      function onMove(ev){
+        const linhas = Array.from(containerEl.querySelectorAll(rowSelector));
+        const idxAtual = linhas.indexOf(row);
+        for(let i=0;i<linhas.length;i++){
+          const outra = linhas[i];
+          if(outra===row) continue;
+          const rect = outra.getBoundingClientRect();
+          const meio = rect.top + rect.height/2;
+          const idxOutra = linhas.indexOf(outra);
+          if(idxOutra < idxAtual && ev.clientY < meio){
+            containerEl.insertBefore(row, outra);
+            break;
+          }
+          if(idxOutra > idxAtual && ev.clientY > meio){
+            containerEl.insertBefore(row, outra.nextSibling);
+            break;
+          }
+        }
+      }
+      function onUp(ev){
+        row.classList.remove('dragging');
+        try{ handle.releasePointerCapture(e.pointerId); }catch(err){}
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        const novaOrdemIds = Array.from(containerEl.querySelectorAll(rowSelector)).map(r=>r.dataset.id);
+        const novoArr = novaOrdemIds.map(id=>arr.find(item=>item.id===id)).filter(Boolean);
+        if(novoArr.length===arr.length){
+          arr.length = 0;
+          novoArr.forEach(item=>arr.push(item));
+          onSalvar();
+        }
+      }
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    });
+  });
+}
+
 const TIPO_CONFIG = {
   ingrediente: {
     arr: ()=>state.custosItens, listId:'custosList', estoqueListId:'estoqueLista',
@@ -1906,6 +2000,7 @@ function editarEmbalagem(id){
   document.getElementById('manualEmbNome').value = item.nome;
   document.getElementById('manualEmbPreco').value = item.precoUnitario;
   document.getElementById('manualEmbEstoque').value = item.estoqueAtual||0;
+  document.getElementById('manualEmbCapacidade').value = item.capacidadeMl||'';
   document.getElementById('btnSalvarEmbalagemManual').textContent = 'Salvar alterações';
   document.getElementById('manualEmbalagemForm').classList.remove('hidden');
   document.getElementById('manualEmbalagemForm').scrollIntoView({behavior:'smooth'});
@@ -1915,6 +2010,7 @@ document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()
   const nome = document.getElementById('manualEmbNome').value.trim();
   const preco = parseFloat(document.getElementById('manualEmbPreco').value)||0;
   const estoque = parseFloat(document.getElementById('manualEmbEstoque').value)||0;
+  const capacidadeMl = parseFloat(document.getElementById('manualEmbCapacidade').value)||null;
   if(!nome){ showToast('Dê um nome para a embalagem.'); return; }
 
   if(embalagemEditandoId){
@@ -1924,6 +2020,7 @@ document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()
       item.nome = nome;
       item.precoUnitario = preco;
       item.estoqueAtual = estoque;
+      item.capacidadeMl = capacidadeMl;
       if(precoMudou){
         item.ultimaAtualizacao = new Date().toISOString();
         if(!item.historico) item.historico = [];
@@ -1937,7 +2034,7 @@ document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()
   }
 
   const agora = new Date().toISOString();
-  state.embalagens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
+  state.embalagens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, capacidadeMl, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
   limparFormularioEmbalagem();
   saveState().then(()=>{ renderItensBase('embalagem'); showToast('Embalagem adicionada.'); });
 });
@@ -1946,6 +2043,7 @@ function limparFormularioEmbalagem(){
   document.getElementById('manualEmbNome').value='';
   document.getElementById('manualEmbPreco').value='';
   document.getElementById('manualEmbEstoque').value='';
+  document.getElementById('manualEmbCapacidade').value='';
   document.getElementById('calcEmbPrecoTotal').value='';
   document.getElementById('calcEmbEmbalagens').value='';
   document.getElementById('calcEmbUnidadesPorEmbalagem').value='';
@@ -1961,19 +2059,23 @@ function renderItensBase(tipo){
     return;
   }
   el.innerHTML = arr.map(item=>`
-    <div class="item-row">
-      <div>
-        <div class="item-name">${escapeHtml(item.nome)}</div>
-        <div class="item-sub">Atualizado em ${new Date(item.ultimaAtualizacao).toLocaleDateString('pt-BR')}${tipo==='ingrediente' ? ' · unidade: '+(item.unidadeBase||'un')+((item.equivalencias&&item.equivalencias.length>0)?' · '+item.equivalencias.map(eq=>'1 '+eq.unidade1+' = '+eq.qtd2+eq.unidade2).join(', '):'') : ''}</div>
-        ${tipo==='ingrediente' ? `<button class="btn-ghost btn-small" onclick="ajustarUnidadeItem('${item.id}')" style="margin-top:4px;padding:3px 8px;font-size:11px;">⚙️ unidade</button>` : ''}
-      </div>
-      <div style="text-align:right;">
-        <div class="mono item-name">${brl(item.precoUnitario)}</div>
-        <button class="btn-ghost btn-small" onclick="editarItem('${tipo}','${item.id}')" style="padding:3px 8px;font-size:11px;">editar</button>
-        <button class="btn-danger-ghost" onclick="removerItem('${tipo}','${item.id}')">remover</button>
+    <div class="item-row draggable-row" data-id="${item.id}">
+      <span class="drag-handle">⠿</span>
+      <div class="draggable-row-conteudo" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div>
+          <div class="item-name">${escapeHtml(item.nome)}</div>
+          <div class="item-sub">Atualizado em ${new Date(item.ultimaAtualizacao).toLocaleDateString('pt-BR')}${tipo==='ingrediente' ? ' · unidade: '+(item.unidadeBase||'un')+((item.equivalencias&&item.equivalencias.length>0)?' · '+item.equivalencias.map(eq=>'1 '+eq.unidade1+' = '+eq.qtd2+eq.unidade2).join(', '):'') : (item.capacidadeMl?' · capacidade: '+item.capacidadeMl+'ml':'')}</div>
+          ${tipo==='ingrediente' ? `<button class="btn-ghost btn-small" onclick="ajustarUnidadeItem('${item.id}')" style="margin-top:4px;padding:3px 8px;font-size:11px;">⚙️ unidade</button>` : ''}
+        </div>
+        <div style="text-align:right;">
+          <div class="mono item-name">${brl(item.precoUnitario)}</div>
+          <button class="btn-ghost btn-small" onclick="editarItem('${tipo}','${item.id}')" style="padding:3px 8px;font-size:11px;">editar</button>
+          <button class="btn-danger-ghost" onclick="removerItem('${tipo}','${item.id}')">remover</button>
+        </div>
       </div>
     </div>
   `).join('');
+  habilitarReordenar(el, '.draggable-row', arr, ()=>saveState());
 }
 
 function estoqueMinimoItem(itemId){
@@ -2901,6 +3003,7 @@ let receitaEditandoId = null;
 document.getElementById('btnSalvarReceita').addEventListener('click', ()=>{
   const nome = document.getElementById('novaReceitaNome').value.trim();
   const horas = parseFloat(document.getElementById('novaReceitaHoras').value)||0;
+  const rendimentoMisturaMl = parseFloat(document.getElementById('novaReceitaRendimentoMistura').value)||null;
   if(!nome){ showToast('Dê um nome para a receita.'); return; }
   if(novaReceitaIngredientesTemp.length===0 && !receitaCaldaAtual){ showToast('Adicione pelo menos um ingrediente ou uma calda.'); return; }
   if(novaReceitaFormatosTemp.length===0){ showToast('Adicione pelo menos um formato de venda (ex: Fatia, Pote 500ml).'); return; }
@@ -2910,6 +3013,7 @@ document.getElementById('btnSalvarReceita').addEventListener('click', ()=>{
     if(r){
       r.nome = nome;
       r.horasForno = horas;
+      r.rendimentoMisturaMl = rendimentoMisturaMl;
       r.calda = receitaCaldaAtual ? {...receitaCaldaAtual} : null;
       r.ingredientes = [...novaReceitaIngredientesTemp];
       r.formatosVenda = novaReceitaFormatosTemp.map(f=>({...f}));
@@ -2922,7 +3026,7 @@ document.getElementById('btnSalvarReceita').addEventListener('click', ()=>{
   }
 
   state.receitas.push({
-    id:uid(), nome, horasForno:horas,
+    id:uid(), nome, horasForno:horas, rendimentoMisturaMl,
     calda: receitaCaldaAtual ? {...receitaCaldaAtual} : null,
     ingredientes:[...novaReceitaIngredientesTemp],
     formatosVenda: novaReceitaFormatosTemp.map(f=>({...f}))
@@ -2932,6 +3036,7 @@ document.getElementById('btnSalvarReceita').addEventListener('click', ()=>{
   receitaCaldaAtual = null;
   document.getElementById('novaReceitaNome').value='';
   document.getElementById('novaReceitaHoras').value='';
+  document.getElementById('novaReceitaRendimentoMistura').value='';
   renderNovaReceitaIngredientes();
   renderNovaReceitaFormatos();
   renderCaldaSecaoReceita();
@@ -2947,6 +3052,7 @@ function editarReceita(id){
   document.getElementById('receitaFormTitulo').textContent = 'Editando: ' + r.nome;
   document.getElementById('novaReceitaNome').value = r.nome;
   document.getElementById('novaReceitaHoras').value = r.horasForno||'';
+  document.getElementById('novaReceitaRendimentoMistura').value = r.rendimentoMisturaMl||'';
   novaReceitaIngredientesTemp = r.ingredientes.map(ing=>({...ing}));
   renderNovaReceitaIngredientes();
   novaReceitaFormatosTemp = (r.formatosVenda||[]).map(f=>({...f}));
@@ -2969,6 +3075,7 @@ function cancelarEdicaoReceita(){
   document.getElementById('receitaFormTitulo').textContent = 'Nova receita';
   document.getElementById('novaReceitaNome').value = '';
   document.getElementById('novaReceitaHoras').value = '';
+  document.getElementById('novaReceitaRendimentoMistura').value = '';
   novaReceitaIngredientesTemp = [];
   renderNovaReceitaIngredientes();
   novaReceitaFormatosTemp = [];
@@ -3007,17 +3114,21 @@ function renderReceitasList(){
     }
     const formatosTxt = (r.formatosVenda||[]).map(f=>`${escapeHtml(f.nome)} (rende ${f.rendimento})`).join(', ');
     return `
-    <div class="receita-card">
-      <h3>${escapeHtml(r.nome)}</h3>
-      <p>${r.ingredientes.length} ingredientes diretos · energia ${brl(custoFixoReceita(r))}</p>
-      <p class="item-sub">${formatosTxt || 'Nenhum formato de venda cadastrado'}</p>
-      ${caldaHtml}
-      <div class="row">
-        <button class="btn-ghost btn-small" onclick="editarReceita('${r.id}')">editar</button>
-        <button class="btn-danger-ghost" onclick="removerReceita('${r.id}')">excluir receita</button>
+    <div class="receita-card draggable-row" data-id="${r.id}" style="align-items:flex-start;">
+      <span class="drag-handle">⠿</span>
+      <div class="draggable-row-conteudo">
+        <h3>${escapeHtml(r.nome)}</h3>
+        <p>${r.ingredientes.length} ingredientes diretos · energia ${brl(custoFixoReceita(r))}</p>
+        <p class="item-sub">${formatosTxt || 'Nenhum formato de venda cadastrado'}</p>
+        ${caldaHtml}
+        <div class="row">
+          <button class="btn-ghost btn-small" onclick="editarReceita('${r.id}')">editar</button>
+          <button class="btn-danger-ghost" onclick="removerReceita('${r.id}')">excluir receita</button>
+        </div>
       </div>
     </div>
   `;}).join('');
+  habilitarReordenar(el, '.draggable-row', state.receitas, ()=>saveState());
 }
 function removerReceita(id){
   const index = state.receitas.findIndex(r=>r.id===id);
@@ -3130,18 +3241,21 @@ document.getElementById('btnConfirmarAddEmbalagemPrecif').addEventListener('clic
   document.getElementById('embalagemPrecifAddArea').classList.add('hidden');
 });
 
-function renderFormatosPrecificacao(r, custoTotal){
+function renderFormatosPrecificacao(r, custoBase, custoEmbalagemCompartilhada){
   const el = document.getElementById('precifFormatosResultado');
   if(!r.formatosVenda || r.formatosVenda.length===0){
     el.innerHTML = `<div class="section-note">Nenhum formato de venda cadastrado para esta receita. Toque em "editar" na receita para adicionar (ex: Fatia, Pote 500ml).</div>`;
     return;
   }
   el.innerHTML = r.formatosVenda.map(f=>{
-    const custoUnidade = custoTotal / (f.rendimento||1);
+    const embVinculada = f.embalagemVinculadaId ? state.embalagens.find(e=>e.id===f.embalagemVinculadaId) : null;
+    const custoUnidade = embVinculada
+      ? (custoBase/(f.rendimento||1)) + embVinculada.precoUnitario
+      : (custoBase + custoEmbalagemCompartilhada)/(f.rendimento||1);
     const lucro = (f.precoVenda||0) - custoUnidade;
     return `
     <div class="formato-preco-card">
-      <div class="formato-preco-header"><strong>${escapeHtml(f.nome)}</strong> <span class="item-sub">(lote rende ${f.rendimento})</span></div>
+      <div class="formato-preco-header"><strong>${escapeHtml(f.nome)}</strong> <span class="item-sub">(lote rende ${f.rendimento}${embVinculada?' · 🎁 '+escapeHtml(embVinculada.nome)+' incluída no custo':''})</span></div>
       <label>Preço de venda</label>
       <input type="number" class="mono formato-preco-input" data-formato-id="${f.id}" data-custo-unidade="${custoUnidade}" value="${f.precoVenda||''}" placeholder="0,00">
       <div class="result-grid">
@@ -3166,7 +3280,8 @@ function atualizarTotaisPrecificacao(){
   const custoComponentes = custoComponentesReceita(r);
   const custoEmbalagem = custoEmbalagensSelecionadas(precifEmbalagemTemp);
   const custoFixo = custoFixoReceita(r);
-  const custoTotal = custoItens + custoComponentes + custoEmbalagem + custoFixo;
+  const custoBase = custoItens + custoComponentes + custoFixo;
+  const custoTotal = custoBase + custoEmbalagem;
 
   let avisos = verificarConversoesIncertas(r.ingredientes, state.custosItens, '', 'direto');
   if(r.calda && r.calda.componenteId){
@@ -3197,7 +3312,7 @@ function atualizarTotaisPrecificacao(){
   document.getElementById('precifCustoFixo').textContent = brl(custoFixo);
   document.getElementById('precifCustoTotal').textContent = brl(custoTotal);
 
-  renderFormatosPrecificacao(r, custoTotal);
+  renderFormatosPrecificacao(r, custoBase, custoEmbalagem);
 }
 
 document.getElementById('btnSalvarPrecos').addEventListener('click', ()=>{
