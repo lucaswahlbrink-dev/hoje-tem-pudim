@@ -547,6 +547,13 @@
   <!-- ABA RECEITAS -->
   <section class="tab-panel" id="tab-receitas">
     <div class="card">
+      <h2>📥 Importar receitas de um PDF</h2>
+      <p class="section-note">Envie um PDF (ebook, receitas fotografadas, etc) e a IA identifica as receitas para você revisar antes de importar. Funciona com qualquer PDF de receitas, não só esse.</p>
+      <input type="file" accept="application/pdf" id="pdfInput" style="display:none">
+      <button class="btn-primary" id="btnEscolherPdf">Escolher PDF</button>
+      <div id="importPdfArea"></div>
+    </div>
+    <div class="card">
       <h2>⚡ Configuração do forno</h2>
       <p class="section-note">Usado para calcular o custo de energia automaticamente em todas as receitas. Ajuste aqui só se trocar de forno ou se o valor do kWh mudar na conta de luz.</p>
       <div class="row">
@@ -1282,6 +1289,138 @@ function sugerirItemExistente(nome, arr){
     return n.length>3 && (alvo.includes(n) || n.includes(alvo));
   });
   return m || null;
+}
+
+// ---------- IMPORTAR RECEITAS DE PDF ----------
+let receitasExtraidasPdf = [];
+
+document.getElementById('btnEscolherPdf').addEventListener('click', ()=>{
+  document.getElementById('pdfInput').click();
+});
+
+document.getElementById('pdfInput').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async ()=>{
+    const base64 = reader.result.split(',')[1];
+    const area = document.getElementById('importPdfArea');
+    area.innerHTML = `<div class="loading-dots">Lendo o PDF com IA, pode levar um pouco mais que uma foto...</div>`;
+    await lerReceitasPdf(base64, file.type || 'application/pdf');
+  };
+  reader.readAsDataURL(file);
+});
+
+async function lerReceitasPdf(base64, mediaType){
+  const area = document.getElementById('importPdfArea');
+  try{
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ base64, mediaType, modo: 'receitas' })
+    });
+    const data = await response.json();
+    if(data.error){
+      let msg = 'erro desconhecido';
+      try{
+        if(typeof data.error === 'string') msg = data.error;
+        else if(typeof data.error.message === 'string') msg = data.error.message;
+        else msg = JSON.stringify(data.error);
+      }catch(e){}
+      throw new Error(msg);
+    }
+    const candidate = (data.candidates && data.candidates[0]) || null;
+    let raw = candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]
+      ? candidate.content.parts[0].text
+      : '[]';
+    raw = raw.replace(/```json|```/g,'').trim();
+    let parsed = [];
+    try{ parsed = JSON.parse(raw); }catch(err){ parsed = []; }
+    receitasExtraidasPdf = parsed.map(r=>({
+      id: uid(),
+      nome: r.nome || 'Receita sem nome',
+      rendimentoFatias: parseInt(r.rendimentoFatias)||8,
+      ingredientes: (r.ingredientes||[]).map(ing=>({nome: ing.nome||'', quantidade: parseFloat(ing.quantidade)||1, unidade: ing.unidade||'un'})),
+      incluir: true
+    }));
+    renderRevisaoPdf();
+  }catch(err){
+    console.error(err);
+    area.innerHTML = `<div class="section-note">Não consegui ler o PDF automaticamente (${err.message || 'erro desconhecido'}).</div>
+      <button class="btn-ghost btn-small" id="btnTentarNovamentePdf">🔄 Tentar novamente com o mesmo PDF</button>`;
+    document.getElementById('btnTentarNovamentePdf').addEventListener('click', ()=>{ lerReceitasPdf(base64, mediaType); });
+  }
+}
+
+function renderRevisaoPdf(){
+  const area = document.getElementById('importPdfArea');
+  if(receitasExtraidasPdf.length===0){
+    area.innerHTML = `<div class="section-note">Nenhuma receita identificada nesse PDF.</div>`;
+    return;
+  }
+  area.innerHTML = `<div class="section-note" style="margin-top:10px;">${receitasExtraidasPdf.length} receita(s) encontrada(s). Desmarque as que não quiser importar.</div>` +
+    receitasExtraidasPdf.map(r=>`
+    <div class="receita-card">
+      <label class="emb-check-label" style="margin-bottom:4px;">
+        <input type="checkbox" class="pdf-receita-check" data-id="${r.id}" ${r.incluir?'checked':''}>
+        <span><strong>${escapeHtml(r.nome)}</strong></span>
+      </label>
+      <p class="item-sub" style="margin-left:28px;">${r.ingredientes.length} ingredientes · rende ${r.rendimentoFatias} fatias</p>
+      <p class="item-sub" style="margin-left:28px;">${r.ingredientes.map(i=>escapeHtml(i.nome)+' ('+i.quantidade+i.unidade+')').join(', ')}</p>
+    </div>
+  `).join('') +
+  `<button class="btn-primary" id="btnConfirmarImportPdf" style="margin-top:10px;">Importar selecionadas</button>`;
+
+  area.querySelectorAll('.pdf-receita-check').forEach(chk=>{
+    chk.addEventListener('change', ()=>{
+      const r = receitasExtraidasPdf.find(x=>x.id===chk.dataset.id);
+      if(r) r.incluir = chk.checked;
+    });
+  });
+  document.getElementById('btnConfirmarImportPdf').addEventListener('click', importarReceitasSelecionadasPdf);
+}
+
+function importarReceitasSelecionadasPdf(){
+  const selecionadas = receitasExtraidasPdf.filter(r=>r.incluir);
+  if(selecionadas.length===0){ showToast('Nenhuma receita selecionada.'); return; }
+  let novosItens = 0;
+  selecionadas.forEach(r=>{
+    const ingredientesReceita = r.ingredientes.map(ing=>{
+      let item = sugerirItemExistente(ing.nome, state.custosItens);
+      if(!item){
+        const agora = new Date().toISOString();
+        item = {id:uid(), nome: ing.nome, precoUnitario:0, estoqueAtual:0, unidadeBase: ing.unidade, ultimaAtualizacao:agora, historico:[{data:agora, preco:0}]};
+        state.custosItens.push(item);
+        novosItens++;
+      }
+      return {itemId: item.id, nome: item.nome, quantidade: ing.quantidade, unidade: ing.unidade};
+    });
+    state.receitas.push({
+      id: uid(),
+      nome: r.nome,
+      rendimentoFatias: r.rendimentoFatias,
+      horasForno: 0,
+      calda: null,
+      ingredientes: ingredientesReceita,
+      precoVendaFatia: 0,
+      precoVendaInteiro: 0
+    });
+  });
+  saveState().then(ok=>{
+    if(ok){
+      showToast(`${selecionadas.length} receita(s) importada(s)${novosItens>0 ? ', '+novosItens+' ingrediente(s) novo(s) criado(s) sem preço' : ''}.`);
+      document.getElementById('importPdfArea').innerHTML = '';
+      document.getElementById('pdfInput').value = '';
+      receitasExtraidasPdf = [];
+      renderReceitasList();
+      renderSelectIngredienteItem();
+      renderSelectCaldaItem();
+      renderItensBase('ingrediente');
+      renderPrecificacaoReceitas();
+      renderVendaReceitaSelect();
+      renderConsumoReceitaSelect();
+    }
+  });
 }
 
 function renderVincularSelect(row, tipo, sugestaoId){
