@@ -159,6 +159,14 @@
   .tabela-custo th.num, .tabela-custo td.num{ text-align:right; }
   .tabela-custo td{ padding:6px 4px; border-bottom:1px solid var(--border); color:var(--ink); }
   .tabela-custo tr:last-child td{ border-bottom:none; }
+
+  .tabela-ingredientes{ width:100%; border-collapse:collapse; margin:2px 0 10px 0; font-size:13px; }
+  .tabela-ingredientes th{ text-align:left; color:var(--muted); font-weight:600; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; padding:4px 4px; border-bottom:1px solid var(--border); }
+  .tabela-ingredientes th.num, .tabela-ingredientes td.num{ text-align:right; }
+  .tabela-ingredientes td{ padding:8px 4px; border-bottom:1px solid var(--border); color:var(--ink); vertical-align:middle; }
+  .tabela-ingredientes tr:last-child td{ border-bottom:none; }
+  .tabela-ingredientes .acoes{ text-align:right; white-space:nowrap; }
+  .tabela-ingredientes .acoes button{ font-size:11px; padding:3px 7px; }
   .undo-toast #btnUndo{
     background:var(--sugar);
     color:#fff;
@@ -2051,10 +2059,18 @@ function renderSelectCaldaItem(){
   sel.innerHTML = state.custosItens.map(i=>`<option value="${i.id}">${escapeHtml(i.nome)}</option>`).join('');
 }
 
+let editandoCaldaIngredienteIdx = null;
+
 document.getElementById('btnAbrirAddCaldaIngrediente').addEventListener('click', ()=>{
+  editandoCaldaIngredienteIdx = null;
+  document.getElementById('btnAddCaldaIngrediente').textContent = 'OK';
+  document.getElementById('selectCaldaItem').value = '';
+  document.getElementById('inputCaldaQtd').value = '';
   document.getElementById('caldaIngredienteAddArea').classList.remove('hidden');
 });
 document.getElementById('btnFecharAddCaldaIngrediente').addEventListener('click', ()=>{
+  editandoCaldaIngredienteIdx = null;
+  document.getElementById('btnAddCaldaIngrediente').textContent = 'OK';
   document.getElementById('caldaIngredienteAddArea').classList.add('hidden');
 });
 document.getElementById('btnAddCaldaIngrediente').addEventListener('click', ()=>{
@@ -2063,19 +2079,45 @@ document.getElementById('btnAddCaldaIngrediente').addEventListener('click', ()=>
   const unidade = document.getElementById('selectCaldaUnidade').value;
   if(!itemId || !qtd){ showToast('Escolha um item e uma quantidade.'); return; }
   const item = state.custosItens.find(i=>i.id===itemId);
-  novaCaldaIngredientesTemp.push({itemId, nome:item.nome, quantidade:qtd, unidade});
+  if(editandoCaldaIngredienteIdx!==null){
+    novaCaldaIngredientesTemp[editandoCaldaIngredienteIdx] = {itemId, nome:item.nome, quantidade:qtd, unidade};
+    editandoCaldaIngredienteIdx = null;
+    document.getElementById('btnAddCaldaIngrediente').textContent = 'OK';
+  }else{
+    novaCaldaIngredientesTemp.push({itemId, nome:item.nome, quantidade:qtd, unidade});
+  }
   document.getElementById('inputCaldaQtd').value='';
   renderNovaCaldaIngredientesTemp();
   document.getElementById('caldaIngredienteAddArea').classList.add('hidden');
 });
 function renderNovaCaldaIngredientesTemp(){
   const el = document.getElementById('novaCaldaIngredientes');
-  el.innerHTML = novaCaldaIngredientesTemp.map((ing,idx)=>`
-    <div class="ingredient-item">
-      <span>${escapeHtml(ing.nome)} — ${ing.quantidade} ${ing.unidade}</span>
-      <button class="btn-danger-ghost" onclick="removerCaldaIngredienteTemp(${idx})">remover</button>
-    </div>
-  `).join('');
+  if(novaCaldaIngredientesTemp.length===0){ el.innerHTML=''; return; }
+  el.innerHTML = `<table class="tabela-ingredientes">
+    <thead><tr><th>Item</th><th class="num">Quantidade</th><th></th></tr></thead>
+    <tbody>
+      ${novaCaldaIngredientesTemp.map((ing,idx)=>`
+        <tr>
+          <td>${escapeHtml(ing.nome)}</td>
+          <td class="num mono">${ing.quantidade}${ing.unidade||''}</td>
+          <td class="acoes">
+            <button class="btn-ghost" onclick="editarCaldaIngredienteTemp(${idx})">editar</button>
+            <button class="btn-danger-ghost" onclick="removerCaldaIngredienteTemp(${idx})">remover</button>
+          </td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>`;
+}
+function editarCaldaIngredienteTemp(idx){
+  const ing = novaCaldaIngredientesTemp[idx];
+  if(!ing) return;
+  editandoCaldaIngredienteIdx = idx;
+  document.getElementById('selectCaldaItem').value = ing.itemId;
+  document.getElementById('inputCaldaQtd').value = ing.quantidade;
+  document.getElementById('selectCaldaUnidade').value = ing.unidade;
+  document.getElementById('btnAddCaldaIngrediente').textContent = 'Salvar alteração';
+  document.getElementById('caldaIngredienteAddArea').classList.remove('hidden');
 }
 function removerCaldaIngredienteTemp(idx){
   novaCaldaIngredientesTemp.splice(idx,1);
@@ -2179,9 +2221,15 @@ function renderCaldaSecaoReceita(){
 
 // ---------- RECEITAS: INGREDIENTES ----------
 document.getElementById('btnAbrirAddIngrediente').addEventListener('click', ()=>{
+  editandoIngredienteIdx = null;
+  document.getElementById('btnAddIngrediente').textContent = 'OK';
+  document.getElementById('selectIngredienteItem').value = '';
+  document.getElementById('inputIngredienteQtd').value = '';
   document.getElementById('ingredienteAddArea').classList.remove('hidden');
 });
 document.getElementById('btnFecharAddIngrediente').addEventListener('click', ()=>{
+  editandoIngredienteIdx = null;
+  document.getElementById('btnAddIngrediente').textContent = 'OK';
   document.getElementById('ingredienteAddArea').classList.add('hidden');
 });
 document.getElementById('btnAddIngrediente').addEventListener('click', ()=>{
@@ -2190,20 +2238,48 @@ document.getElementById('btnAddIngrediente').addEventListener('click', ()=>{
   const unidade = document.getElementById('selectIngredienteUnidade').value;
   if(!itemId || !qtd){ showToast('Escolha um item e uma quantidade.'); return; }
   const item = state.custosItens.find(i=>i.id===itemId);
-  novaReceitaIngredientesTemp.push({itemId, nome:item.nome, quantidade:qtd, unidade});
+  if(editandoIngredienteIdx!==null){
+    novaReceitaIngredientesTemp[editandoIngredienteIdx] = {itemId, nome:item.nome, quantidade:qtd, unidade};
+    editandoIngredienteIdx = null;
+    document.getElementById('btnAddIngrediente').textContent = 'OK';
+  }else{
+    novaReceitaIngredientesTemp.push({itemId, nome:item.nome, quantidade:qtd, unidade});
+  }
   document.getElementById('inputIngredienteQtd').value='';
   renderNovaReceitaIngredientes();
   document.getElementById('ingredienteAddArea').classList.add('hidden');
 });
 
+let editandoIngredienteIdx = null;
+
 function renderNovaReceitaIngredientes(){
   const el = document.getElementById('novaReceitaIngredientes');
-  el.innerHTML = novaReceitaIngredientesTemp.map((ing,idx)=>`
-    <div class="ingredient-item">
-      <span>${escapeHtml(ing.nome)} — ${ing.quantidade} ${ing.unidade||''}</span>
-      <button class="btn-danger-ghost" onclick="removerIngredienteTemp(${idx})">remover</button>
-    </div>
-  `).join('');
+  if(novaReceitaIngredientesTemp.length===0){ el.innerHTML=''; return; }
+  el.innerHTML = `<table class="tabela-ingredientes">
+    <thead><tr><th>Item</th><th class="num">Quantidade</th><th></th></tr></thead>
+    <tbody>
+      ${novaReceitaIngredientesTemp.map((ing,idx)=>`
+        <tr>
+          <td>${escapeHtml(ing.nome)}</td>
+          <td class="num mono">${ing.quantidade}${ing.unidade||''}</td>
+          <td class="acoes">
+            <button class="btn-ghost" onclick="editarIngredienteTemp(${idx})">editar</button>
+            <button class="btn-danger-ghost" onclick="removerIngredienteTemp(${idx})">remover</button>
+          </td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>`;
+}
+function editarIngredienteTemp(idx){
+  const ing = novaReceitaIngredientesTemp[idx];
+  if(!ing) return;
+  editandoIngredienteIdx = idx;
+  document.getElementById('selectIngredienteItem').value = ing.itemId;
+  document.getElementById('inputIngredienteQtd').value = ing.quantidade;
+  document.getElementById('selectIngredienteUnidade').value = ing.unidade;
+  document.getElementById('btnAddIngrediente').textContent = 'Salvar alteração';
+  document.getElementById('ingredienteAddArea').classList.remove('hidden');
 }
 function removerIngredienteTemp(idx){
   novaReceitaIngredientesTemp.splice(idx,1);
@@ -2274,6 +2350,8 @@ function editarReceita(id){
   renderNovaReceitaIngredientes();
   receitaCaldaAtual = r.calda ? {...r.calda} : null;
   renderCaldaSecaoReceita();
+  editandoIngredienteIdx = null;
+  document.getElementById('btnAddIngrediente').textContent = 'OK';
   document.getElementById('ingredienteAddArea').classList.add('hidden');
   document.getElementById('btnSalvarReceita').textContent = 'Salvar alterações';
   document.getElementById('btnCancelarEdicaoReceita').classList.remove('hidden');
@@ -2290,6 +2368,8 @@ function cancelarEdicaoReceita(){
   renderNovaReceitaIngredientes();
   receitaCaldaAtual = null;
   renderCaldaSecaoReceita();
+  editandoIngredienteIdx = null;
+  document.getElementById('btnAddIngrediente').textContent = 'OK';
   document.getElementById('ingredienteAddArea').classList.add('hidden');
   document.getElementById('btnSalvarReceita').textContent = 'Salvar receita';
   document.getElementById('btnCancelarEdicaoReceita').classList.add('hidden');
