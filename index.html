@@ -662,6 +662,12 @@
       <button class="btn-ghost hidden" id="btnCancelarEdicaoReceita" style="margin-top:8px;">Cancelar edição</button>
     </div>
     <div class="card">
+      <h2>🔍 Verificar conversões de unidade</h2>
+      <p class="section-note">Varre todas as suas receitas de uma vez e mostra, numa lista só, onde a conversão de unidade não pôde ser feita.</p>
+      <button class="btn-secondary" id="btnVerificarConversoes">Verificar todas as receitas</button>
+      <div id="resultadoVerificacaoConversoes" style="margin-top:12px;"></div>
+    </div>
+    <div class="card">
       <h2>Receitas cadastradas</h2>
       <div id="receitasList"></div>
     </div>
@@ -2139,6 +2145,35 @@ function verificarConversoesIncertas(listaIngredientes, arrayItens, prefixo){
 }
 
 let novaCaldaIngredientesTemp = [];
+
+function verificarTodasReceitas(){
+  const resultados = [];
+  state.receitas.forEach(r=>{
+    let avisos = verificarConversoesIncertas(r.ingredientes, state.custosItens, '');
+    if(r.calda && r.calda.componenteId){
+      const comp = state.componentes.find(c=>c.id===r.calda.componenteId);
+      if(comp) avisos = avisos.concat(verificarConversoesIncertas(comp.ingredientes, state.custosItens, '(na calda) '));
+    }
+    if(avisos.length>0){
+      resultados.push({receitaId:r.id, receitaNome:r.nome, avisos});
+    }
+  });
+
+  const el = document.getElementById('resultadoVerificacaoConversoes');
+  if(resultados.length===0){
+    el.innerHTML = `<div class="empty-state"><span class="drip-icon">✅</span><strong>Tudo certo!</strong><span>Nenhum problema de conversão encontrado em nenhuma receita.</span></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="aviso-conversao" style="margin-bottom:10px;"><strong>⚠️ ${resultados.length} receita(s) com problema de conversão:</strong></div>` +
+    resultados.map(res=>`
+    <div class="receita-card">
+      <h3>${escapeHtml(res.receitaNome)}</h3>
+      ${res.avisos.map(a=>`<p class="item-sub">${escapeHtml(a)}</p>`).join('')}
+      <button class="btn-ghost btn-small" onclick="editarReceita('${res.receitaId}')">editar esta receita</button>
+    </div>
+  `).join('');
+}
+document.getElementById('btnVerificarConversoes').addEventListener('click', verificarTodasReceitas);
 let receitaCaldaAtual = null; // {componenteId, quantidade, unidade} ou null
 
 document.getElementById('selectCaldaUnidade').innerHTML = unidadeOptions();
