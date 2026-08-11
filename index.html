@@ -304,17 +304,46 @@
     padding:12px;
     margin-bottom:14px;
   }
+  .sidebar{ display:none; }
+
   @media (min-width: 860px){
-    main{ max-width: 1100px; }
-    .tab-panel.active{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-      gap: 16px;
-      align-items: start;
+    body{ padding-bottom:0; }
+    .sidebar{
+      display:flex;
+      flex-direction:column;
+      align-items:stretch;
+      position:fixed;
+      top:0; left:0; bottom:0;
+      width:220px;
+      background:var(--caramel-deep);
+      padding:16px 10px;
+      gap:4px;
+      z-index:60;
+      transition:width .2s ease;
+      overflow-x:hidden;
     }
-    .tab-panel.active .card{ margin-bottom: 0; }
-    header.app-header{ max-width: 1100px; margin: 0 auto; padding-left: 20px; padding-right: 20px; }
-    nav.tabbar{ width: 100%; max-width: 1100px; left: 50%; right: auto; transform: translateX(-50%); border-radius: 16px 16px 0 0; }
+    .sidebar.collapsed{ width:64px; }
+    .sidebar-toggle{
+      background:none; border:none; color:#fff; opacity:.8;
+      align-self:flex-end; padding:8px; margin-bottom:12px; flex:none;
+    }
+    .sidebar.collapsed .sidebar-toggle{ align-self:center; }
+    .sidebar .sidebar-btn{
+      display:flex; align-items:center; gap:12px;
+      background:none; border:none; color:#F0DCC4;
+      padding:11px 12px; border-radius:10px; font-size:14px; font-weight:600;
+      text-align:left; white-space:nowrap;
+    }
+    .sidebar .sidebar-btn svg{ width:20px; height:20px; flex:none; }
+    .sidebar .sidebar-btn.active{ background:var(--sugar); color:#fff; }
+    .sidebar.collapsed .sidebar-label{ display:none; }
+    .sidebar.collapsed .sidebar-btn{ justify-content:center; padding:11px 0; }
+
+    nav.tabbar{ display:none; }
+    header.app-header{ margin-left:220px; padding:22px 28px 0 28px; max-width:none; transition:margin-left .2s ease; }
+    main{ margin-left:220px; max-width:900px; transition:margin-left .2s ease; }
+    body.sidebar-collapsed header.app-header{ margin-left:64px; }
+    body.sidebar-collapsed main{ margin-left:64px; }
   }
 </style>
 </head>
@@ -334,6 +363,31 @@
 </div>
 
 <div id="appContent" class="hidden">
+<nav class="sidebar" id="sidebarNav">
+  <button class="sidebar-toggle" id="btnToggleSidebar" title="Recolher/expandir menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <button class="tab-btn sidebar-btn active" data-tab="compras">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.2"/></svg>
+    <span class="sidebar-label">Compras</span>
+  </button>
+  <button class="tab-btn sidebar-btn" data-tab="receitas">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v18M6 3c3 0 3 4 0 4M18 3v7a3 3 0 0 1-6 0V3"/></svg>
+    <span class="sidebar-label">Receitas</span>
+  </button>
+  <button class="tab-btn sidebar-btn" data-tab="precificacao">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M8 7h5.5a2.5 2.5 0 1 1 0 5H8h6a2.5 2.5 0 1 1 0 5H8"/></svg>
+    <span class="sidebar-label">Preço</span>
+  </button>
+  <button class="tab-btn sidebar-btn" data-tab="vendas">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h2l2.4 12.2a2 2 0 0 0 2 1.8h7.2a2 2 0 0 0 2-1.6L20 8H6"/><circle cx="9" cy="20" r="1"/><circle cx="17" cy="20" r="1"/></svg>
+    <span class="sidebar-label">Vendas</span>
+  </button>
+  <button class="tab-btn sidebar-btn" data-tab="painel">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V10M12 19V5M20 19v-7"/></svg>
+    <span class="sidebar-label">Painel</span>
+  </button>
+</nav>
 <header class="app-header">
   <h1>Hoje Tem Pudim</h1>
   <p>Bastidores — compras, receitas, preço e venda</p>
@@ -1012,13 +1066,18 @@ async function saveState(){
 }
 
 // ---------- TABS ----------
+document.getElementById('btnToggleSidebar').addEventListener('click', ()=>{
+  document.getElementById('sidebarNav').classList.toggle('collapsed');
+  document.body.classList.toggle('sidebar-collapsed');
+});
+
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
-    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
     document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
-    if(btn.dataset.tab==='painel') renderPainel();
+    document.getElementById('tab-'+tab).classList.add('active');
+    if(tab==='painel') renderPainel();
   });
 });
 
