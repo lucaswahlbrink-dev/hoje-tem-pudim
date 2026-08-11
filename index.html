@@ -149,6 +149,16 @@
 
   .detalhe-custo{ margin:-4px 0 10px 0; }
   .detalhe-linha{ display:flex; justify-content:space-between; font-size:12px; color:var(--muted); padding:3px 0 3px 12px; }
+
+  .acc-toggle{ cursor:pointer; user-select:none; }
+  .acc-chevron{ display:inline-block; font-size:11px; color:var(--muted); transition:transform .2s ease; margin-left:2px; }
+  .acc-toggle.aberto .acc-chevron{ transform:rotate(180deg); }
+
+  .tabela-custo{ width:100%; border-collapse:collapse; margin:2px 0 10px 0; font-size:12px; }
+  .tabela-custo th{ text-align:left; color:var(--muted); font-weight:600; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; padding:4px 4px; border-bottom:1px solid var(--border); }
+  .tabela-custo th.num, .tabela-custo td.num{ text-align:right; }
+  .tabela-custo td{ padding:6px 4px; border-bottom:1px solid var(--border); color:var(--ink); }
+  .tabela-custo tr:last-child td{ border-bottom:none; }
   .undo-toast #btnUndo{
     background:var(--sugar);
     color:#fff;
@@ -293,6 +303,18 @@
     border-radius:12px;
     padding:12px;
     margin-bottom:14px;
+  }
+  @media (min-width: 860px){
+    main{ max-width: 1100px; }
+    .tab-panel.active{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+    .tab-panel.active .card{ margin-bottom: 0; }
+    header.app-header{ max-width: 1100px; margin: 0 auto; padding-left: 20px; padding-right: 20px; }
+    nav.tabbar{ width: 100%; max-width: 1100px; left: 50%; right: auto; transform: translateX(-50%); border-radius: 16px 16px 0 0; }
   }
 </style>
 </head>
@@ -565,13 +587,34 @@
     <div class="card" id="precificacaoResultadoCard" style="display:none;">
       <h2 id="precifTitulo">Precificação</h2>
       <div id="precifAvisos"></div>
-      <div class="summary-line"><span>Custo dos ingredientes diretos</span><span class="mono" id="precifCustoIngredientes">R$ 0,00</span></div>
-      <div id="precifDetalheIngredientes" class="detalhe-custo"></div>
-      <div class="summary-line"><span>Custo dos componentes</span><span class="mono" id="precifCustoComponentes">R$ 0,00</span></div>
-      <div id="precifDetalheComponentes" class="detalhe-custo"></div>
-      <div class="divider-label">🎁 Embalagens padrão desta receita</div>
-      <div id="precifEmbalagensLista"></div>
+
+      <div class="summary-line acc-toggle" id="toggleDetalheIngredientes">
+        <span>Custo dos ingredientes diretos <span class="acc-chevron">▾</span></span>
+        <span class="mono" id="precifCustoIngredientes">R$ 0,00</span>
+      </div>
+      <div id="precifDetalheIngredientes" class="detalhe-custo hidden"></div>
+
+      <div class="summary-line acc-toggle" id="toggleDetalheComponentes">
+        <span>Custo dos componentes <span class="acc-chevron">▾</span></span>
+        <span class="mono" id="precifCustoComponentes">R$ 0,00</span>
+      </div>
+      <div id="precifDetalheComponentes" class="detalhe-custo hidden"></div>
+
+      <div class="divider-label">🎁 Embalagens desta receita</div>
+      <div id="precifEmbalagemSelecionadaLista"></div>
+      <button class="btn-ghost btn-small" id="btnAbrirAddEmbalagemPrecif" style="margin:6px 0 10px 0;">+ Adicionar embalagem</button>
+      <div id="embalagemPrecifAddArea" class="hidden" style="margin-bottom:10px;">
+        <div class="row" style="margin-bottom:8px;">
+          <select id="selectEmbalagemPrecif"></select>
+          <input type="number" id="inputEmbalagemPrecifQtd" placeholder="Qtd" class="mono" value="1" style="max-width:70px;flex:none;">
+        </div>
+        <div class="row">
+          <button class="btn-secondary" id="btnConfirmarAddEmbalagemPrecif">OK</button>
+          <button class="btn-ghost" id="btnCancelarAddEmbalagemPrecif">Cancelar</button>
+        </div>
+      </div>
       <div class="summary-line"><span>Custo de embalagem</span><span class="mono" id="precifCustoEmbalagem">R$ 0,00</span></div>
+
       <div class="summary-line"><span>Custo fixo (energia etc)</span><span class="mono" id="precifCustoFixo">R$ 0,00</span></div>
       <div class="summary-line total"><span>Custo total do pudim</span><span class="mono" id="precifCustoTotal">R$ 0,00</span></div>
       <label style="margin-top:12px;">Preço de venda — fatia</label>
@@ -1756,14 +1799,36 @@ function custoConvertido(item, qtd, unidade){
 function renderDetalheCusto(containerId, listaIngredientes, arrayItens){
   const el = document.getElementById(containerId);
   if(!el) return;
-  if(!listaIngredientes || listaIngredientes.length===0){ el.innerHTML=''; return; }
-  el.innerHTML = listaIngredientes.map(ing=>{
+  if(!listaIngredientes || listaIngredientes.length===0){ el.innerHTML=`<div class="section-note" style="margin:0 0 10px 12px;">Nenhum item.</div>`; return; }
+  const linhas = listaIngredientes.map(ing=>{
     const item = arrayItens.find(i=>i.id===ing.itemId);
     if(!item) return '';
-    const custo = custoConvertido(item, ing.quantidade, ing.unidade);
-    return `<div class="detalhe-linha"><span>${escapeHtml(item.nome)} — ${ing.quantidade}${ing.unidade||''}</span><span class="mono">${brl(custo)}</span></div>`;
+    const custoTotalItem = custoConvertido(item, ing.quantidade, ing.unidade);
+    const custoUnitExibido = item.precoUnitario;
+    return `<tr>
+      <td>${escapeHtml(item.nome)}</td>
+      <td class="num mono">${ing.quantidade}${ing.unidade||''}</td>
+      <td class="num mono">${brl(custoUnitExibido)}</td>
+      <td class="num mono">${brl(custoTotalItem)}</td>
+    </tr>`;
   }).join('');
+  el.innerHTML = `<table class="tabela-custo">
+    <thead><tr><th>Item</th><th class="num">Qtd.</th><th class="num">Valor un.</th><th class="num">Total</th></tr></thead>
+    <tbody>${linhas}</tbody>
+  </table>`;
 }
+
+function toggleAccordion(headerId, contentId){
+  const header = document.getElementById(headerId);
+  const content = document.getElementById(contentId);
+  header.addEventListener('click', ()=>{
+    const abrindo = content.classList.contains('hidden');
+    content.classList.toggle('hidden');
+    header.classList.toggle('aberto', abrindo);
+  });
+}
+toggleAccordion('toggleDetalheIngredientes', 'precifDetalheIngredientes');
+toggleAccordion('toggleDetalheComponentes', 'precifDetalheComponentes');
 
 function verificarConversoesIncertas(listaIngredientes, arrayItens, prefixo){
   const avisos = [];
@@ -2118,6 +2183,8 @@ function renderPrecificacaoReceitas(){
   `).join('');
 }
 
+let precifEmbalagemTemp = [];
+
 function selecionarReceitaPrecificacao(id){
   receitaSelecionadaId = id;
   renderPrecificacaoReceitas();
@@ -2131,20 +2198,74 @@ function calcularPrecificacao(){
   card.style.display='block';
   document.getElementById('precifTitulo').textContent = 'Precificação — ' + r.nome;
 
-  renderEmbalagemChecklist('precifEmbalagensLista', embalagemArrayToMap(r.embalagemPadrao), atualizarTotaisPrecificacao, true);
+  precifEmbalagemTemp = (r.embalagemPadrao||[]).map(e=>({...e}));
+  renderPrecifEmbalagemSelecionada();
+  document.getElementById('embalagemPrecifAddArea').classList.add('hidden');
   document.getElementById('precoVendaFatia').value = r.precoVendaFatia || '';
   document.getElementById('precoVendaInteiro').value = r.precoVendaInteiro || '';
 
   atualizarTotaisPrecificacao();
 }
 
+function renderPrecifEmbalagemSelecionada(){
+  const el = document.getElementById('precifEmbalagemSelecionadaLista');
+  if(precifEmbalagemTemp.length===0){
+    el.innerHTML = `<div class="section-note" style="margin:0 0 8px 0;">Nenhuma embalagem adicionada ainda.</div>`;
+    return;
+  }
+  el.innerHTML = precifEmbalagemTemp.map((sel,idx)=>{
+    const emb = state.embalagens.find(e=>e.id===sel.itemId);
+    const nome = emb ? emb.nome : 'Embalagem removida';
+    const custo = emb ? emb.precoUnitario*sel.quantidade : 0;
+    return `
+    <div class="ingredient-item">
+      <span>${escapeHtml(nome)} — ${sel.quantidade}un <span class="item-sub mono">(${brl(custo)})</span></span>
+      <button class="btn-danger-ghost" onclick="removerEmbalagemPrecifTemp(${idx})">remover</button>
+    </div>`;
+  }).join('');
+}
+function removerEmbalagemPrecifTemp(idx){
+  precifEmbalagemTemp.splice(idx,1);
+  renderPrecifEmbalagemSelecionada();
+  atualizarTotaisPrecificacao();
+}
+
+function renderSelectEmbalagemPrecif(){
+  const sel = document.getElementById('selectEmbalagemPrecif');
+  const disponiveis = state.embalagens.filter(e=>e.incluirNaPrecificacao!==false);
+  if(disponiveis.length===0){
+    sel.innerHTML = `<option value="">Nenhuma embalagem disponível</option>`;
+    return;
+  }
+  sel.innerHTML = disponiveis.map(e=>`<option value="${e.id}">${escapeHtml(e.nome)} (${brl(e.precoUnitario)}/un)</option>`).join('');
+}
+
+document.getElementById('btnAbrirAddEmbalagemPrecif').addEventListener('click', ()=>{
+  renderSelectEmbalagemPrecif();
+  document.getElementById('inputEmbalagemPrecifQtd').value = 1;
+  document.getElementById('embalagemPrecifAddArea').classList.remove('hidden');
+});
+document.getElementById('btnCancelarAddEmbalagemPrecif').addEventListener('click', ()=>{
+  document.getElementById('embalagemPrecifAddArea').classList.add('hidden');
+});
+document.getElementById('btnConfirmarAddEmbalagemPrecif').addEventListener('click', ()=>{
+  const itemId = document.getElementById('selectEmbalagemPrecif').value;
+  const qtd = parseFloat(document.getElementById('inputEmbalagemPrecifQtd').value)||1;
+  if(!itemId){ showToast('Escolha uma embalagem.'); return; }
+  const existente = precifEmbalagemTemp.find(e=>e.itemId===itemId);
+  if(existente){ existente.quantidade += qtd; }
+  else{ precifEmbalagemTemp.push({itemId, quantidade:qtd}); }
+  renderPrecifEmbalagemSelecionada();
+  atualizarTotaisPrecificacao();
+  document.getElementById('embalagemPrecifAddArea').classList.add('hidden');
+});
+
 function atualizarTotaisPrecificacao(){
   const r = state.receitas.find(x=>x.id===receitaSelecionadaId);
   if(!r) return;
   const custoItens = custoItensReceita(r);
   const custoComponentes = custoComponentesReceita(r);
-  const selecionadas = lerEmbalagemChecklist('precifEmbalagensLista');
-  const custoEmbalagem = custoEmbalagensSelecionadas(selecionadas);
+  const custoEmbalagem = custoEmbalagensSelecionadas(precifEmbalagemTemp);
   const custoFixo = custoFixoReceita(r);
   const custoTotal = custoItens + custoComponentes + custoEmbalagem + custoFixo;
 
@@ -2191,7 +2312,7 @@ document.getElementById('btnSalvarPrecos').addEventListener('click', ()=>{
   if(!r) return;
   r.precoVendaFatia = parseFloat(document.getElementById('precoVendaFatia').value)||0;
   r.precoVendaInteiro = parseFloat(document.getElementById('precoVendaInteiro').value)||0;
-  r.embalagemPadrao = lerEmbalagemChecklist('precifEmbalagensLista');
+  r.embalagemPadrao = precifEmbalagemTemp.map(e=>({...e}));
   saveState().then(ok=>{
     if(ok){ showToast('Precificação salva.'); calcularPrecificacao(); }
   });
