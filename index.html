@@ -2302,34 +2302,51 @@ function paraMesmaFamilia(qtd, de, para){
   return null;
 }
 
-function tentarConverterViaEquivalencia(qtd, unidadeOrigem, unidadeDestino, qtdLado1, unidadeLado1, qtdLado2, unidadeLado2){
-  const emLado1 = paraMesmaFamilia(qtd, unidadeOrigem, unidadeLado1);
-  if(emLado1===null || !qtdLado1) return null;
-  const vezes = emLado1 / qtdLado1;
-  const emLado2 = vezes * qtdLado2;
-  return paraMesmaFamilia(emLado2, unidadeLado2, unidadeDestino);
+// Monta um grafo de unidades: cada aresta A->B guarda "quantos B tem em 1 A".
+// Arestas universais vêm das famílias (g<->kg, ml<->L etc). Arestas extras vêm
+// das equivalências configuradas no item (ex: 1 un = 200g), nos dois sentidos.
+// Isso permite ENCADEAR várias equivalências (ml -> g -> un), não só uma por vez.
+function construirGrafoConversao(item){
+  const grafo = {};
+  function addAresta(a, b, fator){
+    if(!a || !b || !isFinite(fator)) return;
+    if(!grafo[a]) grafo[a] = [];
+    grafo[a].push({para:b, fator});
+  }
+  UNIDADES.forEach(u1=>{
+    UNIDADES.forEach(u2=>{
+      if(u1===u2) return;
+      const fator = paraMesmaFamilia(1, u1, u2);
+      if(fator!==null) addAresta(u1, u2, fator);
+    });
+  });
+  if(item && item.equivalencias){
+    item.equivalencias.forEach(eq=>{
+      if(!eq.qtd1 || !eq.qtd2 || !eq.unidade1 || !eq.unidade2) return;
+      addAresta(eq.unidade1, eq.unidade2, eq.qtd2/eq.qtd1);
+      addAresta(eq.unidade2, eq.unidade1, eq.qtd1/eq.qtd2);
+    });
+  }
+  return grafo;
 }
 
 function converterQuantidade(qtd, unidadeOrigem, unidadeDestino, item){
-  if(!unidadeOrigem || !unidadeDestino || unidadeOrigem===unidadeDestino) return qtd;
-  const famO = FAMILIA_UNIDADE[unidadeOrigem];
-  const famD = FAMILIA_UNIDADE[unidadeDestino];
-  if(!famO || !famD) return qtd;
-  if(famO===famD){
-    const direto = paraMesmaFamilia(qtd, unidadeOrigem, unidadeDestino);
-    if(direto!==null) return direto;
+  if(!unidadeOrigem || !unidadeDestino) return qtd;
+  if(unidadeOrigem===unidadeDestino) return qtd;
+  const grafo = construirGrafoConversao(item);
+  const visitados = new Set([unidadeOrigem]);
+  const fila = [{unidade:unidadeOrigem, fator:1}];
+  while(fila.length>0){
+    const atual = fila.shift();
+    if(atual.unidade===unidadeDestino) return qtd*atual.fator;
+    (grafo[atual.unidade]||[]).forEach(aresta=>{
+      if(!visitados.has(aresta.para)){
+        visitados.add(aresta.para);
+        fila.push({unidade:aresta.para, fator:atual.fator*aresta.fator});
+      }
+    });
   }
-  // cruzando de família (ou mesma família sem serem a mesma unidade): tenta cada equivalência configurada deste item
-  if(item && item.equivalencias && item.equivalencias.length>0){
-    for(const eq of item.equivalencias){
-      if(!eq.qtd1 || !eq.qtd2) continue;
-      const viaLado1 = tentarConverterViaEquivalencia(qtd, unidadeOrigem, unidadeDestino, eq.qtd1, eq.unidade1, eq.qtd2, eq.unidade2);
-      if(viaLado1!==null) return viaLado1;
-      const viaLado2 = tentarConverterViaEquivalencia(qtd, unidadeOrigem, unidadeDestino, eq.qtd2, eq.unidade2, eq.qtd1, eq.unidade1);
-      if(viaLado2!==null) return viaLado2;
-    }
-  }
-  return null; // não é possível converter sem uma equivalência configurada
+  return null; // não existe caminho de conversão com as equivalências configuradas
 }
 
 // Calcula o custo de "qtd" de "unidade" de um item, convertendo para a unidade base dele quando possível
