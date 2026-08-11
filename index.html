@@ -2247,6 +2247,12 @@ function renderPrecificacaoReceitas(){
 let precifEmbalagemTemp = [];
 
 function selecionarReceitaPrecificacao(id){
+  if(receitaSelecionadaId === id){
+    receitaSelecionadaId = null;
+    renderPrecificacaoReceitas();
+    document.getElementById('precificacaoResultadoCard').style.display = 'none';
+    return;
+  }
   receitaSelecionadaId = id;
   renderPrecificacaoReceitas();
   calcularPrecificacao();
