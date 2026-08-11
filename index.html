@@ -135,6 +135,20 @@
     max-width:90vw;
   }
   .undo-toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
+  .aviso-conversao{
+    background:#FBEAEA;
+    border:1px solid #E8B4B4;
+    border-radius:12px;
+    padding:10px 12px;
+    margin-bottom:12px;
+    font-size:12.5px;
+    color:#8A3B3B;
+    line-height:1.5;
+  }
+  .aviso-conversao strong{display:block;margin-bottom:3px;}
+
+  .detalhe-custo{ margin:-4px 0 10px 0; }
+  .detalhe-linha{ display:flex; justify-content:space-between; font-size:12px; color:var(--muted); padding:3px 0 3px 12px; }
   .undo-toast #btnUndo{
     background:var(--sugar);
     color:#fff;
@@ -550,8 +564,11 @@
     </div>
     <div class="card" id="precificacaoResultadoCard" style="display:none;">
       <h2 id="precifTitulo">Precificação</h2>
+      <div id="precifAvisos"></div>
       <div class="summary-line"><span>Custo dos ingredientes diretos</span><span class="mono" id="precifCustoIngredientes">R$ 0,00</span></div>
+      <div id="precifDetalheIngredientes" class="detalhe-custo"></div>
       <div class="summary-line"><span>Custo dos componentes</span><span class="mono" id="precifCustoComponentes">R$ 0,00</span></div>
+      <div id="precifDetalheComponentes" class="detalhe-custo"></div>
       <div class="divider-label">🎁 Embalagens padrão desta receita</div>
       <div id="precifEmbalagensLista"></div>
       <div class="summary-line"><span>Custo de embalagem</span><span class="mono" id="precifCustoEmbalagem">R$ 0,00</span></div>
@@ -1734,6 +1751,34 @@ function custoConvertido(item, qtd, unidade){
   return item.precoUnitario * convertido;
 }
 
+// Verifica, numa lista de ingredientes (da receita ou da calda), quais itens têm unidade diferente
+// da unidade base do item e não têm como converter (falta a equivalência de xícara). Retorna avisos.
+function renderDetalheCusto(containerId, listaIngredientes, arrayItens){
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  if(!listaIngredientes || listaIngredientes.length===0){ el.innerHTML=''; return; }
+  el.innerHTML = listaIngredientes.map(ing=>{
+    const item = arrayItens.find(i=>i.id===ing.itemId);
+    if(!item) return '';
+    const custo = custoConvertido(item, ing.quantidade, ing.unidade);
+    return `<div class="detalhe-linha"><span>${escapeHtml(item.nome)} — ${ing.quantidade}${ing.unidade||''}</span><span class="mono">${brl(custo)}</span></div>`;
+  }).join('');
+}
+
+function verificarConversoesIncertas(listaIngredientes, arrayItens, prefixo){
+  const avisos = [];
+  (listaIngredientes||[]).forEach(ing=>{
+    const item = arrayItens.find(i=>i.id===ing.itemId);
+    if(!item || !ing.unidade || !item.unidadeBase) return;
+    if(ing.unidade===item.unidadeBase) return;
+    const convertido = converterQuantidade(ing.quantidade, ing.unidade, item.unidadeBase, item);
+    if(convertido===null){
+      avisos.push(`${prefixo}${item.nome}: não sei converter "${ing.unidade}" para "${item.unidadeBase}" (falta a equivalência de xícara em ⚙️ unidade). Calculando ${ing.quantidade} como se já estivesse em ${item.unidadeBase}, o que pode estar errado.`);
+    }
+  });
+  return avisos;
+}
+
 let novaCaldaIngredientesTemp = [];
 let receitaCaldaAtual = null; // {componenteId, quantidade, unidade} ou null
 
@@ -2102,6 +2147,24 @@ function atualizarTotaisPrecificacao(){
   const custoEmbalagem = custoEmbalagensSelecionadas(selecionadas);
   const custoFixo = custoFixoReceita(r);
   const custoTotal = custoItens + custoComponentes + custoEmbalagem + custoFixo;
+
+  let avisos = verificarConversoesIncertas(r.ingredientes, state.custosItens, '');
+  if(r.calda && r.calda.componenteId){
+    const comp = state.componentes.find(c=>c.id===r.calda.componenteId);
+    if(comp) avisos = avisos.concat(verificarConversoesIncertas(comp.ingredientes, state.custosItens, '(na calda) '));
+  }
+  const avisosEl = document.getElementById('precifAvisos');
+  avisosEl.innerHTML = avisos.length>0
+    ? `<div class="aviso-conversao"><strong>⚠️ Confira antes de confiar no número:</strong>${avisos.map(a=>`<div>${escapeHtml(a)}</div>`).join('')}</div>`
+    : '';
+
+  renderDetalheCusto('precifDetalheIngredientes', r.ingredientes, state.custosItens);
+  if(r.calda && r.calda.componenteId){
+    const compCalda = state.componentes.find(c=>c.id===r.calda.componenteId);
+    renderDetalheCusto('precifDetalheComponentes', compCalda ? compCalda.ingredientes : [], state.custosItens);
+  }else{
+    document.getElementById('precifDetalheComponentes').innerHTML = '';
+  }
 
   document.getElementById('precifCustoIngredientes').textContent = brl(custoItens);
   document.getElementById('precifCustoComponentes').textContent = brl(custoComponentes);
