@@ -3249,13 +3249,19 @@ function renderFormatosPrecificacao(r, custoBase, custoEmbalagemCompartilhada){
   }
   el.innerHTML = r.formatosVenda.map(f=>{
     const embVinculada = f.embalagemVinculadaId ? state.embalagens.find(e=>e.id===f.embalagemVinculadaId) : null;
+    const custoBasePorUnidade = custoBase/(f.rendimento||1);
     const custoUnidade = embVinculada
-      ? (custoBase/(f.rendimento||1)) + embVinculada.precoUnitario
+      ? custoBasePorUnidade + embVinculada.precoUnitario
       : (custoBase + custoEmbalagemCompartilhada)/(f.rendimento||1);
     const lucro = (f.precoVenda||0) - custoUnidade;
+    const detalheHtml = embVinculada
+      ? `<div class="detalhe-linha"><span>Ingredientes/energia (÷${f.rendimento})</span><span class="mono">${brl(custoBasePorUnidade)}</span></div>
+         <div class="detalhe-linha"><span>🎁 ${escapeHtml(embVinculada.nome)}</span><span class="mono">${brl(embVinculada.precoUnitario)}</span></div>`
+      : `<div class="detalhe-linha"><span>Ingredientes/energia + embalagem compartilhada (÷${f.rendimento})</span><span class="mono">${brl(custoUnidade)}</span></div>`;
     return `
     <div class="formato-preco-card">
       <div class="formato-preco-header"><strong>${escapeHtml(f.nome)}</strong> <span class="item-sub">(lote rende ${f.rendimento}${embVinculada?' · 🎁 '+escapeHtml(embVinculada.nome)+' incluída no custo':''})</span></div>
+      <div class="detalhe-custo" style="margin-top:0;">${detalheHtml}</div>
       <label>Preço de venda</label>
       <input type="number" class="mono formato-preco-input" data-formato-id="${f.id}" data-custo-unidade="${custoUnidade}" value="${f.precoVenda||''}" placeholder="0,00">
       <div class="result-grid">
