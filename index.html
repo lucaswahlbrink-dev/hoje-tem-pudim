@@ -143,9 +143,9 @@
   .empty-state strong{display:block;color:var(--ink);font-size:15px;margin-bottom:4px;}
   .empty-state span{font-size:13px;}
 
-  nav.tabbar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;padding:6px 4px calc(6px + env(safe-area-inset-bottom)) 4px;z-index:50;}
-  nav.tabbar button{flex:1;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;color:var(--muted);border-radius:12px;font-size:10.5px;font-weight:600;}
-  nav.tabbar button svg{width:20px;height:20px;}
+  nav.tabbar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;padding:6px 2px calc(6px + env(safe-area-inset-bottom)) 2px;z-index:50;}
+  nav.tabbar button{flex:1;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 1px;color:var(--muted);border-radius:12px;font-size:9.5px;font-weight:600;}
+  nav.tabbar button svg{width:18px;height:18px;}
   nav.tabbar button.active{color:var(--sugar);background:var(--sugar-light);}
 
   .ingredient-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);}
@@ -460,6 +460,10 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v18M6 3c3 0 3 4 0 4M18 3v7a3 3 0 0 1-6 0V3"/></svg>
     <span class="sidebar-label">Receitas</span>
   </button>
+  <button class="tab-btn sidebar-btn" data-tab="fazer">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11h16l-1.5 7.2a2 2 0 0 1-2 1.8H7.5a2 2 0 0 1-2-1.8L4 11z"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    <span class="sidebar-label">Fazer</span>
+  </button>
   <button class="tab-btn sidebar-btn" data-tab="precificacao">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M8 7h5.5a2.5 2.5 0 1 1 0 5H8h6a2.5 2.5 0 1 1 0 5H8"/></svg>
     <span class="sidebar-label">Preço</span>
@@ -653,8 +657,8 @@
     </div>
   </section>
 
-  <!-- ABA RECEITAS -->
-  <section class="tab-panel" id="tab-receitas">
+  <!-- ABA FAZER RECEITA -->
+  <section class="tab-panel" id="tab-fazer">
     <div class="card">
       <h2>🍮 Fazer Receita</h2>
       <p class="section-note">Escolha a receita, ajuste o tamanho do lote se quiser, e confirme para descontar do estoque sozinho e marcar quanto ficou pronto para vender.</p>
@@ -662,6 +666,10 @@
       <select id="fazerReceitaSelect"><option value="">Escolher...</option></select>
       <div id="fazerReceitaArea"></div>
     </div>
+  </section>
+
+  <!-- ABA RECEITAS -->
+  <section class="tab-panel" id="tab-receitas">
     <div class="card">
       <h2>📥 Importar receitas de um PDF</h2>
       <p class="section-note">Envie um PDF (ebook, receitas fotografadas, etc) e a IA identifica as receitas para você revisar antes de importar. Funciona com qualquer PDF de receitas, não só esse.</p>
@@ -985,6 +993,10 @@
   <button class="tab-btn" data-tab="receitas">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v18M6 3c3 0 3 4 0 4M18 3v7a3 3 0 0 1-6 0V3"/></svg>
     Receitas
+  </button>
+  <button class="tab-btn" data-tab="fazer">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11h16l-1.5 7.2a2 2 0 0 1-2 1.8H7.5a2 2 0 0 1-2-1.8L4 11z"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    Fazer
   </button>
   <button class="tab-btn" data-tab="precificacao">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M8 7h5.5a2.5 2.5 0 1 1 0 5H8h6a2.5 2.5 0 1 1 0 5H8"/></svg>
