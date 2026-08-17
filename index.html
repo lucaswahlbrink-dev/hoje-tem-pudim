@@ -1442,31 +1442,24 @@ function renderFazerReceitaArea(){
   const r = state.receitas.find(x=>x.id===receitaId);
   if(!r){ el.innerHTML=''; return; }
 
-  let html = '';
-  if(!r.rendimentoMisturaMl){
-    html += `<div class="section-note">Essa receita não tem "rendimento da mistura" configurado (edite a receita para preencher), então não dá para ajustar o tamanho sozinho. Vai sair do tamanho original.</div>`;
-  }else{
-    const formatosComEmbalagem = (r.formatosVenda||[]).filter(f=>f.embalagemVinculadaId);
-    html += `
-      <div class="divider-label">Ajustar tamanho do lote</div>
-      <label>Quero fazer (ml de mistura)</label>
-      <input type="number" id="fazerReceitaQtdMl" class="mono" value="${r.rendimentoMisturaMl}">
-      <p class="section-note" style="margin-top:-6px;">Essa receita, do jeito que está salva, rende ${formatarQuantidadeAmigavel(r.rendimentoMisturaMl,'ml')}.</p>`;
-    if(formatosComEmbalagem.length>0){
-      html += `
-      <label>Ou: quero fazer quantas unidades de um formato específico?</label>
-      <div class="row">
-        <select id="fazerReceitaFormatoSelect">
-          <option value="">Escolher formato...</option>
-          ${formatosComEmbalagem.map(f=>`<option value="${f.id}">${escapeHtml(f.nome)}</option>`).join('')}
-        </select>
-        <input type="number" id="fazerReceitaFormatoQtd" placeholder="Quantas un." class="mono">
-      </div>
-      <button class="btn-ghost btn-small" id="btnCalcularPorFormato" style="margin-bottom:10px;">Calcular pelo formato</button>`;
-    }
-  }
-
-  html += `
+  const formatos = r.formatosVenda||[];
+  let html = `
+    <div class="divider-label">Ajustar tamanho do lote</div>
+    <label>Qual formato você vai produzir?</label>
+    <select id="fazerReceitaFormatoProduzido">
+      <option value="">Nenhum específico — só ajustar múltiplo da receita</option>
+      ${formatos.map(f=>`<option value="${f.id}">${escapeHtml(f.nome)} (rende ${f.rendimento} na receita original)</option>`).join('')}
+    </select>
+    <div id="fazerReceitaFormatoQtdArea" class="hidden">
+      <label>Quantas unidades desse formato você vai fazer?</label>
+      <input type="number" id="fazerReceitaFormatoQtdDesejada" class="mono">
+    </div>
+    <div id="fazerReceitaMultiplicadorArea">
+      <label>Fazer quantas vezes a receita original?</label>
+      <input type="number" id="fazerReceitaMultiplicador" class="mono" value="1" step="0.5" min="0.1">
+      <p class="section-note" style="margin-top:-6px;">Ex: 2 para o dobro, 0,5 para metade. A receita original é sempre "1".</p>
+    </div>
+    <p class="section-note" id="fazerReceitaResumoEscala"></p>
     <div class="divider-label">Ingredientes para este lote</div>
     <div id="fazerReceitaIngredientesLista"></div>
     <button class="btn-primary" id="btnConfirmarFazerReceita" style="margin-top:10px;">✅ Fazer receita (desconta do estoque)</button>
@@ -1475,32 +1468,41 @@ function renderFazerReceitaArea(){
 
   calcularEscalaFazerReceita(r);
 
-  const inputQtdMl = document.getElementById('fazerReceitaQtdMl');
-  if(inputQtdMl) inputQtdMl.addEventListener('input', ()=>calcularEscalaFazerReceita(r));
-
-  const btnCalcPorFormato = document.getElementById('btnCalcularPorFormato');
-  if(btnCalcPorFormato){
-    btnCalcPorFormato.addEventListener('click', ()=>{
-      const formatoId = document.getElementById('fazerReceitaFormatoSelect').value;
-      const qtdFormato = parseFloat(document.getElementById('fazerReceitaFormatoQtd').value)||0;
-      const formato = (r.formatosVenda||[]).find(f=>f.id===formatoId);
-      if(!formato || !qtdFormato){ showToast('Escolha o formato e a quantidade.'); return; }
-      const emb = state.embalagens.find(e=>e.id===formato.embalagemVinculadaId);
-      if(!emb || !emb.capacidadeMl){ showToast('Essa embalagem não tem capacidade configurada.'); return; }
-      const mlNecessario = qtdFormato * emb.capacidadeMl;
-      document.getElementById('fazerReceitaQtdMl').value = mlNecessario;
-      calcularEscalaFazerReceita(r);
-      showToast(`Precisa de ${formatarQuantidadeAmigavel(mlNecessario,'ml')} de mistura para ${qtdFormato}x ${formato.nome}.`);
-    });
-  }
+  document.getElementById('fazerReceitaFormatoProduzido').addEventListener('change', ()=>{
+    const formatoId = document.getElementById('fazerReceitaFormatoProduzido').value;
+    const areaQtd = document.getElementById('fazerReceitaFormatoQtdArea');
+    const areaMult = document.getElementById('fazerReceitaMultiplicadorArea');
+    if(formatoId){
+      const formato = formatos.find(f=>f.id===formatoId);
+      areaQtd.classList.remove('hidden');
+      areaMult.classList.add('hidden');
+      document.getElementById('fazerReceitaFormatoQtdDesejada').value = formato ? formato.rendimento : 1;
+    }else{
+      areaQtd.classList.add('hidden');
+      areaMult.classList.remove('hidden');
+    }
+    calcularEscalaFazerReceita(r);
+  });
+  document.getElementById('fazerReceitaFormatoQtdDesejada').addEventListener('input', ()=>calcularEscalaFazerReceita(r));
+  document.getElementById('fazerReceitaMultiplicador').addEventListener('input', ()=>calcularEscalaFazerReceita(r));
 
   document.getElementById('btnConfirmarFazerReceita').addEventListener('click', ()=>confirmarFazerReceita(r));
 }
 
 function calcularEscalaFazerReceita(r){
-  const inputQtdMl = document.getElementById('fazerReceitaQtdMl');
-  const qtdDesejada = inputQtdMl ? (parseFloat(inputQtdMl.value)||r.rendimentoMisturaMl||0) : 0;
-  fazerReceitaFatorEscala = (r.rendimentoMisturaMl && qtdDesejada) ? (qtdDesejada / r.rendimentoMisturaMl) : 1;
+  const formatoSelect = document.getElementById('fazerReceitaFormatoProduzido');
+  const formatoId = formatoSelect ? formatoSelect.value : '';
+  const resumoEl = document.getElementById('fazerReceitaResumoEscala');
+  if(formatoId){
+    const formato = (r.formatosVenda||[]).find(f=>f.id===formatoId);
+    const qtdDesejada = parseFloat(document.getElementById('fazerReceitaFormatoQtdDesejada').value)||0;
+    fazerReceitaFatorEscala = (formato && formato.rendimento && qtdDesejada>0) ? (qtdDesejada/formato.rendimento) : 1;
+    if(resumoEl) resumoEl.textContent = formato ? `Isso equivale a ${arredondarCompra(fazerReceitaFatorEscala)}x a receita original.` : '';
+  }else{
+    const inputMultiplicador = document.getElementById('fazerReceitaMultiplicador');
+    fazerReceitaFatorEscala = inputMultiplicador ? (parseFloat(inputMultiplicador.value)||1) : 1;
+    if(resumoEl) resumoEl.textContent = '';
+  }
 
   let lista = r.ingredientes.map(ing=>({
     itemId: ing.itemId, nome: ing.nome, unidade: ing.unidade,
@@ -1585,10 +1587,9 @@ function confirmarFazerReceita(r){
     item.estoqueAtual = Math.max(0, (item.estoqueAtual||0) - necessario);
   });
 
-  const formatoSelect = document.getElementById('fazerReceitaFormatoSelect');
-  const formatoQtdInput = document.getElementById('fazerReceitaFormatoQtd');
+  const formatoSelect = document.getElementById('fazerReceitaFormatoProduzido');
   const formatoId = formatoSelect ? formatoSelect.value : '';
-  const qtdFormato = formatoQtdInput ? (parseFloat(formatoQtdInput.value)||0) : 0;
+  const qtdFormato = formatoId ? (parseFloat(document.getElementById('fazerReceitaFormatoQtdDesejada').value)||0) : 0;
   let mensagemPronto = '';
   if(formatoId && qtdFormato>0){
     const formato = (r.formatosVenda||[]).find(f=>f.id===formatoId);
