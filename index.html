@@ -829,6 +829,11 @@
   <!-- ABA VENDAS -->
   <section class="tab-panel" id="tab-vendas">
     <div class="card">
+      <h2>🍮 Produtos Prontos</h2>
+      <p class="section-note">O que já foi feito (em "Fazer Receita") e está pronto para vender. A venda desconta só daqui, não mexe no estoque de ingredientes de novo.</p>
+      <div id="produtosProntosList"></div>
+    </div>
+    <div class="card">
       <h2>Registrar venda</h2>
       <label>Receita vendida</label>
       <select id="vendaReceita"></select>
@@ -1614,6 +1619,7 @@ function confirmarFazerReceita(r){
       renderItensBase('embalagem');
       renderReceitasList();
       renderVendaReceitaSelect();
+      renderProdutosProntos();
       document.getElementById('fazerReceitaSelect').value = '';
       document.getElementById('fazerReceitaArea').innerHTML = '';
     }
@@ -3674,6 +3680,27 @@ function atualizarNotaProntos(){
   nota.textContent = (formato && formato.estoquePronto>0) ? `🍮 ${formato.estoquePronto} prontos em estoque` : '';
 }
 
+function renderProdutosProntos(){
+  const el = document.getElementById('produtosProntosList');
+  if(!el) return;
+  const prontos = [];
+  state.receitas.forEach(r=>{
+    (r.formatosVenda||[]).forEach(f=>{
+      if(f.estoquePronto>0) prontos.push({ receitaNome:r.nome, formatoNome:f.nome, qtd:f.estoquePronto });
+    });
+  });
+  if(prontos.length===0){
+    el.innerHTML = `<div class="section-note">Nada pronto ainda. Use "Fazer Receita" para produzir e marcar como pronto.</div>`;
+    return;
+  }
+  el.innerHTML = prontos.map(p=>`
+    <div class="item-row">
+      <div class="item-name">${escapeHtml(p.receitaNome)} — ${escapeHtml(p.formatoNome)}</div>
+      <div class="mono item-name">${p.qtd}</div>
+    </div>
+  `).join('');
+}
+
 function atualizarVisibilidadeTaxa(){
   const canal = document.getElementById('vendaCanal').value;
   const pagamento = document.getElementById('vendaPagamento').value;
@@ -3714,7 +3741,7 @@ document.getElementById('btnRegistrarVenda').addEventListener('click', ()=>{
   document.getElementById('vendaTaxa').value='';
   renderEmbalagemChecklist('vendaEmbalagensLista', {});
   saveState().then(ok=>{
-    if(ok){ showToast('Venda registrada.'); renderVendasList(); atualizarNotaProntos(); }
+    if(ok){ showToast('Venda registrada.'); renderVendasList(); atualizarNotaProntos(); renderProdutosProntos(); }
   });
 });
 
@@ -3995,6 +4022,7 @@ function renderAll(){
   renderConsumoReceitaSelect();
   renderVendasList();
   renderConsumosList();
+  renderProdutosProntos();
   document.getElementById('vendaData').value = new Date().toISOString().slice(0,10);
   document.getElementById('consumoData').value = new Date().toISOString().slice(0,10);
   atualizarVisibilidadeTaxa();
