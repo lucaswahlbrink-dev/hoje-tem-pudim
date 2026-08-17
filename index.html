@@ -122,17 +122,12 @@
 
   .item-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);gap:8px;}
 
-  .drag-handle{
-    cursor:grab; touch-action:none; user-select:none;
-    color:var(--muted); font-size:20px; line-height:1;
-    padding:6px 8px; flex:none; letter-spacing:-2px;
-  }
-  .draggable-row{ display:flex; align-items:center; gap:2px; background:var(--surface); }
+  .draggable-row{ background:var(--surface); touch-action:pan-y; cursor:grab; }
+  .draggable-row.drag-armado{ background:var(--sugar-light); }
   .draggable-row.dragging{
     opacity:0.92; box-shadow:0 8px 20px rgba(0,0,0,0.18);
-    position:relative; z-index:80; border-radius:10px;
+    position:relative; z-index:80; border-radius:10px; cursor:grabbing;
   }
-  .draggable-row-conteudo{ flex:1; min-width:0; }
   .item-row:last-child{border-bottom:none;}
   .item-name{font-weight:600;font-size:14px;}
   .item-sub{font-size:12px;color:var(--muted);}
@@ -1047,7 +1042,7 @@ function renderNovaReceitaFormatos(){
       ${novaReceitaFormatosTemp.map((f,idx)=>{
         const emb = f.embalagemVinculadaId ? state.embalagens.find(e=>e.id===f.embalagemVinculadaId) : null;
         return `
-        <tr>
+        <tr class="draggable-row" data-id="${f.id}">
           <td>${escapeHtml(f.nome)}${emb?`<div class="item-sub">🎁 ${escapeHtml(emb.nome)}</div>`:''}</td>
           <td class="num mono">${f.rendimento} un</td>
           <td class="acoes">
@@ -1058,6 +1053,7 @@ function renderNovaReceitaFormatos(){
       `;}).join('')}
     </tbody>
   </table>`;
+  habilitarReordenarBloco(el.querySelector('tbody'), '.draggable-row', novaReceitaFormatosTemp, ()=>renderNovaReceitaFormatos());
 }
 function removerFormatoTemp(idx){
   novaReceitaFormatosTemp.splice(idx,1);
@@ -2058,17 +2054,43 @@ function renderExtractedItems(){
 // ---------- REORDENAR POR ARRASTAR (genérico, funciona com dedo e mouse) ----------
 // containerEl: elemento pai; rowSelector: seletor das linhas arrastáveis (precisam ter data-id);
 // arr: o array de verdade (será reordenado no lugar); onSalvar: chamado depois de soltar.
-function habilitarReordenar(containerEl, rowSelector, arr, onSalvar){
+// Igual habilitarReordenar, mas sem alcinha visível: segura em qualquer parte do bloco
+// (fora de botão/input/select) por um instante e já pode arrastar. Um toque rápido ou
+// um gesto de rolar a tela não ativa o arraste, só um "segurar e mover" de verdade.
+// idField: 'id' ou 'itemId', dependendo de qual campo identifica cada item de forma única.
+function habilitarReordenarBloco(containerEl, rowSelector, arr, onSalvar, idField){
   if(!containerEl) return;
-  containerEl.querySelectorAll(rowSelector+' .drag-handle').forEach(handle=>{
-    handle.addEventListener('pointerdown', (e)=>{
-      const row = handle.closest(rowSelector);
-      if(!row) return;
-      e.preventDefault();
-      row.classList.add('dragging');
-      try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+  idField = idField || 'id';
+  containerEl.querySelectorAll(rowSelector).forEach(row=>{
+    row.addEventListener('pointerdown', (e)=>{
+      if(e.target.closest('button, input, select, a, textarea')) return;
+      const startX = e.clientX, startY = e.clientY;
+      const pointerId = e.pointerId;
+      let armado = false;
+      let arrastando = false;
+
+      const timer = setTimeout(()=>{ armado = true; row.classList.add('drag-armado'); }, 160);
+
+      function limpar(){
+        clearTimeout(timer);
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        document.removeEventListener('pointercancel', onUp);
+        row.classList.remove('drag-armado');
+      }
 
       function onMove(ev){
+        if(!armado){
+          if(Math.abs(ev.clientX-startX)>10 || Math.abs(ev.clientY-startY)>10) limpar();
+          return;
+        }
+        if(!arrastando){
+          arrastando = true;
+          row.classList.remove('drag-armado');
+          row.classList.add('dragging');
+          try{ row.setPointerCapture(pointerId); }catch(err){}
+        }
+        ev.preventDefault();
         const linhas = Array.from(containerEl.querySelectorAll(rowSelector));
         const idxAtual = linhas.indexOf(row);
         for(let i=0;i<linhas.length;i++){
@@ -2077,31 +2099,27 @@ function habilitarReordenar(containerEl, rowSelector, arr, onSalvar){
           const rect = outra.getBoundingClientRect();
           const meio = rect.top + rect.height/2;
           const idxOutra = linhas.indexOf(outra);
-          if(idxOutra < idxAtual && ev.clientY < meio){
-            containerEl.insertBefore(row, outra);
-            break;
-          }
-          if(idxOutra > idxAtual && ev.clientY > meio){
-            containerEl.insertBefore(row, outra.nextSibling);
-            break;
-          }
+          if(idxOutra < idxAtual && ev.clientY < meio){ containerEl.insertBefore(row, outra); break; }
+          if(idxOutra > idxAtual && ev.clientY > meio){ containerEl.insertBefore(row, outra.nextSibling); break; }
         }
       }
-      function onUp(ev){
-        row.classList.remove('dragging');
-        try{ handle.releasePointerCapture(e.pointerId); }catch(err){}
-        document.removeEventListener('pointermove', onMove);
-        document.removeEventListener('pointerup', onUp);
-        const novaOrdemIds = Array.from(containerEl.querySelectorAll(rowSelector)).map(r=>r.dataset.id);
-        const novoArr = novaOrdemIds.map(id=>arr.find(item=>item.id===id)).filter(Boolean);
-        if(novoArr.length===arr.length){
-          arr.length = 0;
-          novoArr.forEach(item=>arr.push(item));
-          onSalvar();
+      function onUp(){
+        limpar();
+        if(arrastando){
+          row.classList.remove('dragging');
+          try{ row.releasePointerCapture(pointerId); }catch(err){}
+          const novaOrdemIds = Array.from(containerEl.querySelectorAll(rowSelector)).map(r=>r.dataset.id);
+          const novoArr = novaOrdemIds.map(id=>arr.find(item=>String(item[idField])===id)).filter(Boolean);
+          if(novoArr.length===arr.length){
+            arr.length = 0;
+            novoArr.forEach(item=>arr.push(item));
+            onSalvar();
+          }
         }
       }
       document.addEventListener('pointermove', onMove);
       document.addEventListener('pointerup', onUp);
+      document.addEventListener('pointercancel', onUp);
     });
   });
 }
@@ -2291,22 +2309,19 @@ function renderItensBase(tipo){
   }
   el.innerHTML = arr.map(item=>`
     <div class="item-row draggable-row" data-id="${item.id}">
-      <span class="drag-handle">⠿</span>
-      <div class="draggable-row-conteudo" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-        <div>
-          <div class="item-name">${escapeHtml(item.nome)}</div>
-          <div class="item-sub">Atualizado em ${new Date(item.ultimaAtualizacao).toLocaleDateString('pt-BR')}${tipo==='ingrediente' ? ' · unidade: '+(item.unidadeBase||'un')+((item.equivalencias&&item.equivalencias.length>0)?' · '+item.equivalencias.map(eq=>'1 '+eq.unidade1+' = '+eq.qtd2+eq.unidade2).join(', '):'') : (item.capacidadeMl?' · capacidade: '+item.capacidadeMl+'ml':'')}</div>
-          ${tipo==='ingrediente' ? `<button class="btn-ghost btn-small" onclick="ajustarUnidadeItem('${item.id}')" style="margin-top:4px;padding:3px 8px;font-size:11px;">⚙️ unidade</button>` : ''}
-        </div>
-        <div style="text-align:right;">
-          <div class="mono item-name">${brl(item.precoUnitario)}</div>
-          <button class="btn-ghost btn-small" onclick="editarItem('${tipo}','${item.id}')" style="padding:3px 8px;font-size:11px;">editar</button>
-          <button class="btn-danger-ghost" onclick="removerItem('${tipo}','${item.id}')">remover</button>
-        </div>
+      <div>
+        <div class="item-name">${escapeHtml(item.nome)}</div>
+        <div class="item-sub">Atualizado em ${new Date(item.ultimaAtualizacao).toLocaleDateString('pt-BR')}${tipo==='ingrediente' ? ' · unidade: '+(item.unidadeBase||'un')+((item.equivalencias&&item.equivalencias.length>0)?' · '+item.equivalencias.map(eq=>'1 '+eq.unidade1+' = '+eq.qtd2+eq.unidade2).join(', '):'') : (item.capacidadeMl?' · capacidade: '+item.capacidadeMl+'ml':'')}</div>
+        ${tipo==='ingrediente' ? `<button class="btn-ghost btn-small" onclick="ajustarUnidadeItem('${item.id}')" style="margin-top:4px;padding:3px 8px;font-size:11px;">⚙️ unidade</button>` : ''}
+      </div>
+      <div style="text-align:right;">
+        <div class="mono item-name">${brl(item.precoUnitario)}</div>
+        <button class="btn-ghost btn-small" onclick="editarItem('${tipo}','${item.id}')" style="padding:3px 8px;font-size:11px;">editar</button>
+        <button class="btn-danger-ghost" onclick="removerItem('${tipo}','${item.id}')">remover</button>
       </div>
     </div>
   `).join('');
-  habilitarReordenar(el, '.draggable-row', arr, ()=>saveState());
+  habilitarReordenarBloco(el, '.draggable-row', arr, ()=>saveState());
 }
 
 function estoqueMinimoItem(itemId){
@@ -3041,7 +3056,7 @@ function renderNovaCaldaIngredientesTemp(){
     <thead><tr><th>Item</th><th class="num">Quantidade</th><th></th></tr></thead>
     <tbody>
       ${novaCaldaIngredientesTemp.map((ing,idx)=>`
-        <tr>
+        <tr class="draggable-row" data-id="${ing.itemId}">
           <td>${escapeHtml(ing.nome)}</td>
           <td class="num mono">${ing.quantidade}${ing.unidade||''}</td>
           <td class="acoes">
@@ -3052,6 +3067,7 @@ function renderNovaCaldaIngredientesTemp(){
       `).join('')}
     </tbody>
   </table>`;
+  habilitarReordenarBloco(el.querySelector('tbody'), '.draggable-row', novaCaldaIngredientesTemp, ()=>renderNovaCaldaIngredientesTemp(), 'itemId');
 }
 function editarCaldaIngredienteTemp(idx){
   const ing = novaCaldaIngredientesTemp[idx];
@@ -3250,7 +3266,7 @@ function renderNovaReceitaIngredientes(){
     <thead><tr><th>Item</th><th class="num">Quantidade</th><th></th></tr></thead>
     <tbody>
       ${novaReceitaIngredientesTemp.map((ing,idx)=>`
-        <tr>
+        <tr class="draggable-row" data-id="${ing.itemId}">
           <td>${escapeHtml(ing.nome)}</td>
           <td class="num mono">${ing.quantidade}${ing.unidade||''}</td>
           <td class="acoes">
@@ -3261,6 +3277,7 @@ function renderNovaReceitaIngredientes(){
       `).join('')}
     </tbody>
   </table>`;
+  habilitarReordenarBloco(el.querySelector('tbody'), '.draggable-row', novaReceitaIngredientesTemp, ()=>renderNovaReceitaIngredientes(), 'itemId');
 }
 function editarIngredienteTemp(idx){
   const ing = novaReceitaIngredientesTemp[idx];
@@ -3403,21 +3420,18 @@ function renderReceitasList(){
     }
     const formatosTxt = (r.formatosVenda||[]).map(f=>`${escapeHtml(f.nome)} (rende ${f.rendimento})`).join(', ');
     return `
-    <div class="receita-card draggable-row" data-id="${r.id}" style="align-items:flex-start;">
-      <span class="drag-handle">⠿</span>
-      <div class="draggable-row-conteudo">
-        <h3>${escapeHtml(r.nome)}</h3>
-        <p>${r.ingredientes.length} ingredientes diretos · energia ${brl(custoFixoReceita(r))}</p>
-        <p class="item-sub">${formatosTxt || 'Nenhum formato de venda cadastrado'}</p>
-        ${caldaHtml}
-        <div class="row">
-          <button class="btn-ghost btn-small" onclick="editarReceita('${r.id}')">editar</button>
-          <button class="btn-danger-ghost" onclick="removerReceita('${r.id}')">excluir receita</button>
-        </div>
+    <div class="receita-card draggable-row" data-id="${r.id}">
+      <h3>${escapeHtml(r.nome)}</h3>
+      <p>${r.ingredientes.length} ingredientes diretos · energia ${brl(custoFixoReceita(r))}</p>
+      <p class="item-sub">${formatosTxt || 'Nenhum formato de venda cadastrado'}</p>
+      ${caldaHtml}
+      <div class="row">
+        <button class="btn-ghost btn-small" onclick="editarReceita('${r.id}')">editar</button>
+        <button class="btn-danger-ghost" onclick="removerReceita('${r.id}')">excluir receita</button>
       </div>
     </div>
   `;}).join('');
-  habilitarReordenar(el, '.draggable-row', state.receitas, ()=>saveState());
+  habilitarReordenarBloco(el, '.draggable-row', state.receitas, ()=>saveState());
 }
 function removerReceita(id){
   const index = state.receitas.findIndex(r=>r.id===id);
