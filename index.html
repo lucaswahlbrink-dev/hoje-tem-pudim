@@ -1534,12 +1534,13 @@ function renderFazerReceitaIngredientesLista(){
       ${fazerReceitaIngredientesEscalados.map((ing,idx)=>{
         const item = state.custosItens.find(i=>i.id===ing.itemId);
         const amigavel = (ing.unidade==='ml'||ing.unidade==='g') && ing.quantidade>=1000 ? formatarQuantidadeAmigavel(ing.quantidade, ing.unidade) : null;
-        let emUnidadesTxt = '—';
+        let emUnidadesTxt = '?';
         let faltando = false;
         let semConversao = false;
         if(item){
           const baseItem = item.unidadeBase||'un';
           if(ing.unidade===baseItem){
+            emUnidadesTxt = formatarQuantidadeAmigavel(ing.quantidade, baseItem);
             faltando = item.estoqueAtual < ing.quantidade;
           }else{
             const necessario = necessarioArredondado(ing.quantidade, ing.unidade, baseItem, item);
@@ -1558,9 +1559,8 @@ function renderFazerReceitaIngredientesLista(){
             <input type="number" class="mono fazer-receita-qtd" data-idx="${idx}" value="${ing.quantidade}" style="width:70px;"> ${ing.unidade||''}
             ${amigavel ? `<div class="item-sub">(${amigavel})</div>` : ''}
           </td>
-          <td class="num" style="font-weight:700;${faltando?'color:#A64545;':''}">
-            ${emUnidadesTxt}
-            ${faltando ? `<div>⚠️</div>` : ''}${semConversao ? `<div>❓</div>` : ''}
+          <td class="num" style="font-weight:700;${faltando?'color:#A64545;':'color:var(--ink);'}">
+            ${semConversao ? '❓' : emUnidadesTxt}
           </td>
         </tr>`;
       }).join('')}
