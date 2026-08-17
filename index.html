@@ -1539,14 +1539,16 @@ function renderFazerReceitaIngredientesLista(){
         let estoqueTxt = '?';
         let faltando = false;
         let semConversao = false;
+        let descontoTxt = null;
         if(item){
           const baseItem = item.unidadeBase||'un';
           estoqueTxt = formatarQuantidadeAmigavel(item.estoqueAtual, baseItem);
-          const necessario = converterQuantidade(ing.quantidade, ing.unidade, baseItem, item);
+          const necessario = necessarioArredondado(ing.quantidade, ing.unidade, baseItem, item);
           if(necessario===null){
             semConversao = true;
           }else{
             faltando = item.estoqueAtual < necessario;
+            if(ing.unidade!==baseItem) descontoTxt = `desconta ${necessario}${baseItem} do estoque`;
           }
         }
         return `
@@ -1555,6 +1557,7 @@ function renderFazerReceitaIngredientesLista(){
           <td class="num">
             <input type="number" class="mono fazer-receita-qtd" data-idx="${idx}" value="${ing.quantidade}" style="width:70px;"> ${ing.unidade||''}
             ${amigavel ? `<div class="item-sub">(${amigavel})</div>` : ''}
+            ${descontoTxt ? `<div class="item-sub">(${descontoTxt})</div>` : ''}
           </td>
           <td class="num" style="${faltando?'color:#A64545;font-weight:700;':''}">${estoqueTxt}${faltando?' ⚠️':''}${semConversao?' ❓':''}</td>
         </tr>`;
@@ -1574,7 +1577,7 @@ function confirmarFazerReceita(r){
     const item = state.custosItens.find(i=>i.id===ing.itemId);
     if(!item) return;
     const baseItem = item.unidadeBase||'un';
-    const necessario = converterQuantidade(ing.quantidade, ing.unidade, baseItem, item);
+    const necessario = necessarioArredondado(ing.quantidade, ing.unidade, baseItem, item);
     if(necessario===null){
       itensSemConversao.push(item.nome);
       return; // não desconta esse item sozinho, pra não bagunçar o estoque com número errado
@@ -2676,6 +2679,19 @@ function converterQuantidade(qtd, unidadeOrigem, unidadeDestino, item){
 }
 
 // Calcula o custo de "qtd" de "unidade" de um item, convertendo para a unidade base dele quando possível
+// Igual converterQuantidade, mas arredonda pra cima quando o destino é uma unidade "inteira"
+// (un, lata, pacote, gema, clara) — não dá pra comprar/consumir meia lata ou meio ovo.
+// Pra kg, L, g etc (contínuo) não arredonda, mantém o valor exato.
+function necessarioArredondado(qtd, unidadeOrigem, unidadeDestino, item){
+  let necessario = converterQuantidade(qtd, unidadeOrigem, unidadeDestino, item);
+  if(necessario===null) return null;
+  if(FAMILIA_UNIDADE[unidadeDestino]==='contagem'){
+    necessario = Math.round(necessario*10000)/10000; // corta erro de ponto flutuante antes de arredondar
+    return Math.ceil(necessario);
+  }
+  return necessario;
+}
+
 function custoConvertido(item, qtd, unidade){
   if(!item) return 0;
   const baseItem = item.unidadeBase || 'un';
