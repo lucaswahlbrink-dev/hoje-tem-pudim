@@ -1531,24 +1531,26 @@ function renderFazerReceitaIngredientesLista(){
   const el = document.getElementById('fazerReceitaIngredientesLista');
   if(!el) return;
   el.innerHTML = `<table class="tabela-ingredientes">
-    <thead><tr><th>Item</th><th class="num">Quantidade</th><th class="num">Estoque</th></tr></thead>
+    <thead><tr><th>Item</th><th class="num">Quantidade</th><th class="num">Em unidades</th></tr></thead>
     <tbody>
       ${fazerReceitaIngredientesEscalados.map((ing,idx)=>{
         const item = state.custosItens.find(i=>i.id===ing.itemId);
         const amigavel = (ing.unidade==='ml'||ing.unidade==='g') && ing.quantidade>=1000 ? formatarQuantidadeAmigavel(ing.quantidade, ing.unidade) : null;
-        let estoqueTxt = '?';
+        let emUnidadesTxt = '—';
         let faltando = false;
         let semConversao = false;
-        let descontoTxt = null;
         if(item){
           const baseItem = item.unidadeBase||'un';
-          estoqueTxt = formatarQuantidadeAmigavel(item.estoqueAtual, baseItem);
-          const necessario = necessarioArredondado(ing.quantidade, ing.unidade, baseItem, item);
-          if(necessario===null){
-            semConversao = true;
+          if(ing.unidade===baseItem){
+            faltando = item.estoqueAtual < ing.quantidade;
           }else{
-            faltando = item.estoqueAtual < necessario;
-            if(ing.unidade!==baseItem) descontoTxt = `desconta ${necessario}${baseItem} do estoque`;
+            const necessario = necessarioArredondado(ing.quantidade, ing.unidade, baseItem, item);
+            if(necessario===null){
+              semConversao = true;
+            }else{
+              emUnidadesTxt = formatarQuantidadeAmigavel(necessario, baseItem);
+              faltando = item.estoqueAtual < necessario;
+            }
           }
         }
         return `
@@ -1557,9 +1559,11 @@ function renderFazerReceitaIngredientesLista(){
           <td class="num">
             <input type="number" class="mono fazer-receita-qtd" data-idx="${idx}" value="${ing.quantidade}" style="width:70px;"> ${ing.unidade||''}
             ${amigavel ? `<div class="item-sub">(${amigavel})</div>` : ''}
-            ${descontoTxt ? `<div class="item-sub">(${descontoTxt})</div>` : ''}
           </td>
-          <td class="num" style="${faltando?'color:#A64545;font-weight:700;':''}">${estoqueTxt}${faltando?' ⚠️':''}${semConversao?' ❓':''}</td>
+          <td class="num" style="font-weight:700;${faltando?'color:#A64545;':''}">
+            ${emUnidadesTxt}
+            ${faltando ? `<div>⚠️</div>` : ''}${semConversao ? `<div>❓</div>` : ''}
+          </td>
         </tr>`;
       }).join('')}
     </tbody>
