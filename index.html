@@ -3069,11 +3069,17 @@ function removerCaldaIngredienteTemp(idx){
   renderNovaCaldaIngredientesTemp();
 }
 
+let caldaEditandoId = null;
+
 document.getElementById('btnNovaCalda').addEventListener('click', ()=>{
+  caldaEditandoId = null;
+  document.getElementById('btnSalvarNovaCalda').textContent = 'Salvar e usar nesta receita';
   document.getElementById('novaCaldaForm').classList.remove('hidden');
   document.getElementById('caldaEscolherArea').classList.add('hidden');
 });
 document.getElementById('btnCancelarNovaCalda').addEventListener('click', ()=>{
+  caldaEditandoId = null;
+  document.getElementById('btnSalvarNovaCalda').textContent = 'Salvar e usar nesta receita';
   document.getElementById('novaCaldaForm').classList.add('hidden');
   novaCaldaIngredientesTemp = [];
   document.getElementById('novaCaldaNome').value='';
@@ -3089,6 +3095,27 @@ document.getElementById('btnSalvarNovaCalda').addEventListener('click', ()=>{
   if(!nome){ showToast('Dê um nome para a calda.'); return; }
   if(novaCaldaIngredientesTemp.length===0){ showToast('Adicione pelo menos um ingrediente.'); return; }
   if(rendeQtd<=0){ showToast('Informe quanto essa calda rende.'); return; }
+
+  if(caldaEditandoId){
+    const comp = state.componentes.find(c=>c.id===caldaEditandoId);
+    if(comp){
+      comp.nome = nome;
+      comp.ingredientes = [...novaCaldaIngredientesTemp];
+      comp.rendimentoQtd = rendeQtd;
+      comp.rendimentoUnidade = rendeUnidade;
+    }
+    caldaEditandoId = null;
+    document.getElementById('btnSalvarNovaCalda').textContent = 'Salvar e usar nesta receita';
+    novaCaldaIngredientesTemp = [];
+    document.getElementById('novaCaldaNome').value='';
+    document.getElementById('novaCaldaRendeQtd').value='';
+    renderNovaCaldaIngredientesTemp();
+    document.getElementById('novaCaldaForm').classList.add('hidden');
+    renderCaldaSecaoReceita();
+    showToast('Calda atualizada.');
+    return;
+  }
+
   const novoComp = { id:uid(), nome, ingredientes:[...novaCaldaIngredientesTemp], rendimentoQtd:rendeQtd, rendimentoUnidade:rendeUnidade };
   state.componentes.push(novoComp);
   receitaCaldaAtual = { componenteId: novoComp.id, quantidade: rendeQtd, unidade: rendeUnidade };
@@ -3150,7 +3177,10 @@ function renderCaldaSecaoReceita(){
         <select id="caldaUnidadeUsada" class="unidade-select">${unidadeOptions(receitaCaldaAtual.unidade)}</select>
       </div>
     </div>
-    <button class="btn-ghost btn-small" id="btnTrocarCalda">Trocar / remover calda desta receita</button>
+    <div class="row">
+      <button class="btn-ghost btn-small" id="btnEditarCalda">✏️ Editar esta calda</button>
+      <button class="btn-ghost btn-small" id="btnTrocarCalda">Trocar / remover</button>
+    </div>
   `;
   document.getElementById('caldaQuantidadeUsada').addEventListener('input', ()=>{
     receitaCaldaAtual.quantidade = parseFloat(document.getElementById('caldaQuantidadeUsada').value)||0;
@@ -3162,6 +3192,21 @@ function renderCaldaSecaoReceita(){
     receitaCaldaAtual = null;
     renderCaldaSecaoReceita();
   });
+  document.getElementById('btnEditarCalda').addEventListener('click', ()=>{
+    abrirEdicaoCalda(comp);
+  });
+}
+
+function abrirEdicaoCalda(comp){
+  caldaEditandoId = comp.id;
+  novaCaldaIngredientesTemp = comp.ingredientes.map(i=>({...i}));
+  document.getElementById('novaCaldaNome').value = comp.nome;
+  document.getElementById('novaCaldaRendeQtd').value = comp.rendimentoQtd;
+  document.getElementById('novaCaldaRendeUnidade').value = comp.rendimentoUnidade;
+  renderNovaCaldaIngredientesTemp();
+  document.getElementById('btnSalvarNovaCalda').textContent = 'Salvar alterações desta calda';
+  document.getElementById('novaCaldaForm').classList.remove('hidden');
+  document.getElementById('caldaEscolherArea').classList.add('hidden');
 }
 
 // ---------- RECEITAS: INGREDIENTES ----------
