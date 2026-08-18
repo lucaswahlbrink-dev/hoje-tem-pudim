@@ -495,6 +495,14 @@
     <p class="section-note">Para itens onde a receita usa uma unidade diferente de como o item é comprado (ex: comprado por "un", usado por "g" na receita), configure aqui a equivalência de cada um, tudo numa tabela só.</p>
     <div id="tabelaConversoesConfig"></div>
     <button class="btn-primary" id="btnSalvarConversoesConfig" style="margin-top:12px;">Salvar todas as conversões</button>
+
+    <h3 style="margin:24px 0 4px 0;font-family:'Fraunces',serif;color:var(--caramel-deep);">🔗 Mesclar itens duplicados</h3>
+    <p class="section-note">Quando dois itens são na verdade a mesma coisa (ex: "ovo inteiro" e "gema" vindo do mesmo ovo, ou um item duplicado por engano), junte os dois aqui. Tudo que usava os itens mesclados passa a usar o item principal, e os outros são apagados. Não tem como desfazer.</p>
+    <label>Item principal (o que vai continuar existindo)</label>
+    <select id="selectItemPrincipalMesclar"></select>
+    <label>Itens a mesclar dentro dele (serão apagados)</label>
+    <div id="listaItensMesclar"></div>
+    <button class="btn-secondary" id="btnMesclarItens" style="margin-top:10px;">Mesclar selecionados</button>
   </div>
 </div>
 
@@ -2391,6 +2399,7 @@ function ajustarUnidadeItem(id){
 // ---------- CONFIGURAÇÕES: TABELA DE CONVERSÕES ----------
 function abrirModalConfiguracoes(){
   renderTabelaConversoesConfig();
+  renderMesclarItensConfig();
   document.getElementById('modalConfiguracoes').classList.remove('hidden');
 }
 document.getElementById('btnAbrirConfiguracoes').addEventListener('click', abrirModalConfiguracoes);
@@ -2469,6 +2478,83 @@ document.getElementById('btnSalvarConversoesConfig').addEventListener('click', (
     document.getElementById('modalConfiguracoes').classList.add('hidden');
     renderItensBase('ingrediente');
     verificarTodasReceitas();
+  });
+});
+
+function renderMesclarItensConfig(){
+  const selPrincipal = document.getElementById('selectItemPrincipalMesclar');
+  const listaEl = document.getElementById('listaItensMesclar');
+  if(state.custosItens.length<2){
+    selPrincipal.innerHTML = `<option value="">Precisa de pelo menos 2 ingredientes cadastrados</option>`;
+    listaEl.innerHTML = '';
+    return;
+  }
+  selPrincipal.innerHTML = `<option value="">Escolher...</option>` + state.custosItens.map(i=>`<option value="${i.id}">${escapeHtml(i.nome)}</option>`).join('');
+  renderListaItensMesclar();
+  selPrincipal.addEventListener('change', renderListaItensMesclar);
+}
+
+function renderListaItensMesclar(){
+  const principalId = document.getElementById('selectItemPrincipalMesclar').value;
+  const listaEl = document.getElementById('listaItensMesclar');
+  if(!principalId){
+    listaEl.innerHTML = `<div class="section-note">Escolha o item principal primeiro.</div>`;
+    return;
+  }
+  const outros = state.custosItens.filter(i=>i.id!==principalId);
+  if(outros.length===0){
+    listaEl.innerHTML = `<div class="section-note">Não há outros itens para mesclar.</div>`;
+    return;
+  }
+  listaEl.innerHTML = outros.map(i=>`
+    <label class="emb-check-label" style="margin-bottom:4px;">
+      <input type="checkbox" class="mesclar-check" value="${i.id}">
+      <span>${escapeHtml(i.nome)}</span>
+    </label>
+  `).join('');
+}
+
+document.getElementById('btnMesclarItens').addEventListener('click', ()=>{
+  const principalId = document.getElementById('selectItemPrincipalMesclar').value;
+  const idsParaMesclar = Array.from(document.querySelectorAll('.mesclar-check:checked')).map(chk=>chk.value);
+  if(!principalId){ showToast('Escolha o item principal.'); return; }
+  if(idsParaMesclar.length===0){ showToast('Marque pelo menos um item para mesclar.'); return; }
+  const principal = state.custosItens.find(i=>i.id===principalId);
+  const nomesMesclados = idsParaMesclar.map(id=>{
+    const it = state.custosItens.find(i=>i.id===id);
+    return it ? it.nome : '';
+  }).filter(Boolean);
+  if(!confirm(`Isso vai apagar "${nomesMesclados.join('", "')}" e trocar todo uso deles por "${principal.nome}", em todas as receitas e caldas. Não dá para desfazer. Continuar?`)) return;
+
+  state.receitas.forEach(r=>{
+    r.ingredientes.forEach(ing=>{
+      if(idsParaMesclar.includes(ing.itemId)){
+        ing.itemId = principalId;
+        ing.nome = principal.nome;
+      }
+    });
+  });
+  state.componentes.forEach(comp=>{
+    comp.ingredientes.forEach(ing=>{
+      if(idsParaMesclar.includes(ing.itemId)){
+        ing.itemId = principalId;
+        ing.nome = principal.nome;
+      }
+    });
+  });
+  state.custosItens = state.custosItens.filter(i=>!idsParaMesclar.includes(i.id));
+
+  saveState().then(ok=>{
+    if(ok){
+      showToast(`Mesclado em "${principal.nome}".`);
+      renderTabelaConversoesConfig();
+      renderMesclarItensConfig();
+      renderItensBase('ingrediente');
+      renderSelectIngredienteItem();
+      renderSelectCaldaItem();
+      renderReceitasList();
+      verificarTodasReceitas();
+    }
   });
 });
 
@@ -2734,7 +2820,11 @@ function renderDetalheCusto(containerId, listaIngredientes, arrayItens){
   if(!listaIngredientes || listaIngredientes.length===0){ el.innerHTML=`<div class="section-note" style="margin:0 0 10px 12px;">Nenhum item.</div>`; return; }
   const linhas = listaIngredientes.map(ing=>{
     const item = arrayItens.find(i=>i.id===ing.itemId);
-    if(!item) return '';
+    if(!item){
+      return `<tr style="background:#FBEAEA;">
+        <td colspan="4" style="color:#A64545;font-weight:600;">⚠️ "${escapeHtml(ing.nome)}" não foi encontrado na base (foi excluído?). NÃO está entrando no custo total. Edite a receita e re-vincule esse ingrediente.</td>
+      </tr>`;
+    }
     const custoTotalItem = custoConvertido(item, ing.quantidade, ing.unidade);
     const custoUnitExibido = item.precoUnitario;
     return `<tr>
@@ -2766,7 +2856,17 @@ function verificarConversoesIncertas(listaIngredientes, arrayItens, prefixo, ori
   const avisos = [];
   (listaIngredientes||[]).forEach((ing, idx)=>{
     const item = arrayItens.find(i=>i.id===ing.itemId);
-    if(!item || !ing.unidade) return;
+    if(!item){
+      avisos.push({
+        mensagem: `${prefixo}"${ing.nome}": esse item não existe mais na base (foi excluído?). NÃO está entrando no custo. Edite a receita e escolha o item certo de novo.`,
+        itemNome: ing.nome,
+        idx,
+        origem: origem||'direto',
+        orfao: true
+      });
+      return;
+    }
+    if(!ing.unidade) return;
     const baseItem = item.unidadeBase || 'un';
     if(ing.unidade===baseItem) return;
     const convertido = converterQuantidade(ing.quantidade, ing.unidade, baseItem, item);
@@ -2812,9 +2912,9 @@ function verificarTodasReceitas(){
       ${res.avisos.map(a=>`
         <div class="aviso-item-ia">
           <p class="item-sub">${escapeHtml(a.mensagem)}</p>
-          ${a.origem==='direto' ? `
+          ${(a.origem==='direto' && !a.orfao) ? `
           <button class="btn-ghost btn-small" onclick="pedirSugestaoIA(this,'${res.receitaId}',${a.idx})">🤖 Perguntar à IA</button>
-          <div class="sugestao-ia-area"></div>` : `<p class="item-sub">(ingredientes da calda: ajuste direto na calda, por enquanto a sugestão por IA só olha ingredientes diretos)</p>`}
+          <div class="sugestao-ia-area"></div>` : (a.orfao ? '' : `<p class="item-sub">(ingredientes da calda: ajuste direto na calda, por enquanto a sugestão por IA só olha ingredientes diretos)</p>`)}
         </div>
       `).join('')}
       <button class="btn-ghost btn-small" onclick="editarReceita('${res.receitaId}')">editar esta receita</button>
@@ -3609,7 +3709,7 @@ function atualizarTotaisPrecificacao(){
     ? `<div class="aviso-conversao"><strong>⚠️ Confira antes de confiar no número:</strong>${avisos.map(a=>`
         <div class="aviso-item-ia">
           <div>${escapeHtml(a.mensagem)}</div>
-          ${a.origem==='direto' ? `<button class="btn-ghost btn-small" onclick="pedirSugestaoIA(this,'${r.id}',${a.idx})">🤖 Perguntar à IA</button><div class="sugestao-ia-area"></div>` : ''}
+          ${(a.origem==='direto' && !a.orfao) ? `<button class="btn-ghost btn-small" onclick="pedirSugestaoIA(this,'${r.id}',${a.idx})">🤖 Perguntar à IA</button><div class="sugestao-ia-area"></div>` : ''}
         </div>
       `).join('')}</div>`
     : '';
