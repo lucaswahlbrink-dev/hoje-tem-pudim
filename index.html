@@ -3785,6 +3785,9 @@ function atualizarNotaProntos(){
   const formato = r ? (r.formatosVenda||[]).find(f=>f.id===formatoId) : null;
   const nota = document.getElementById('vendaProntosNota');
   nota.textContent = (formato && formato.estoquePronto>0) ? `🍮 ${formato.estoquePronto} prontos em estoque` : '';
+  if(formato && formato.precoVenda>0){
+    document.getElementById('vendaValor').value = formato.precoVenda;
+  }
 }
 
 function renderProdutosProntos(){
@@ -3835,13 +3838,16 @@ document.getElementById('btnRegistrarVenda').addEventListener('click', ()=>{
   if(!formatoId){ showToast('Escolha o formato vendido.'); return; }
   if(!comprador){ showToast('Informe o nome do comprador.'); return; }
   if(!valor && valor!==0){ showToast('Informe o valor recebido.'); return; }
-  const valorLiquido = taxaPercentual>0 ? valor - (valor*taxaPercentual/100) : valor;
-  state.vendas.push({id:uid(), receitaId, formatoId, quantidade:qtd, comprador, data, valor, canal, formaPagamento, taxaPercentual, valorLiquido, embalagens});
   const r = state.receitas.find(x=>x.id===receitaId);
   const formato = r ? (r.formatosVenda||[]).find(f=>f.id===formatoId) : null;
-  if(formato && formato.estoquePronto>0){
-    formato.estoquePronto = Math.max(0, formato.estoquePronto - qtd);
+  const prontoDisponivel = formato ? (formato.estoquePronto||0) : 0;
+  if(prontoDisponivel < qtd){
+    showToast(`Não tem estoque pronto suficiente: tem ${prontoDisponivel}, tentando vender ${qtd}. Faça a receita primeiro em "Fazer".`);
+    return;
   }
+  const valorLiquido = taxaPercentual>0 ? valor - (valor*taxaPercentual/100) : valor;
+  state.vendas.push({id:uid(), receitaId, formatoId, quantidade:qtd, comprador, data, valor, canal, formaPagamento, taxaPercentual, valorLiquido, embalagens});
+  formato.estoquePronto = Math.max(0, formato.estoquePronto - qtd);
   document.getElementById('vendaComprador').value='';
   document.getElementById('vendaValor').value='';
   document.getElementById('vendaQtd').value='';
