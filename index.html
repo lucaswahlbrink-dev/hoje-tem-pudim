@@ -837,8 +837,7 @@
   <!-- ABA VENDAS -->
   <section class="tab-panel" id="tab-vendas">
     <div class="card">
-      <h2>🍮 Produtos Prontos</h2>
-      <p class="section-note">O que já foi feito (em "Fazer Receita") e está pronto para vender. A venda desconta só daqui, não mexe no estoque de ingredientes de novo.</p>
+      <h2>Estoque pronto para venda!</h2>
       <div id="produtosProntosList"></div>
     </div>
     <div class="card">
@@ -1370,7 +1369,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
     document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
     document.getElementById('tab-'+tab).classList.add('active');
-    if(tab==='painel') renderPainel();
+    loadState().then(()=>{
+      if(tab==='painel') renderPainel();
+    });
   });
 });
 
@@ -1587,6 +1588,12 @@ function renderFazerReceitaIngredientesLista(){
 }
 
 function confirmarFazerReceita(r){
+  const formatoSelectPrevio = document.getElementById('fazerReceitaFormatoProduzido');
+  const formatoIdPrevio = formatoSelectPrevio ? formatoSelectPrevio.value : '';
+  if(!formatoIdPrevio){
+    const confirmou = confirm('Você não escolheu um formato ("Qual formato você vai produzir?"). Sem isso, o estoque de ingredientes desconta normalmente, mas NADA aparece em "Estoque pronto para venda". Quer continuar assim mesmo?');
+    if(!confirmou) return;
+  }
   const itensSemConversao = [];
   fazerReceitaIngredientesEscalados.forEach(ing=>{
     const item = state.custosItens.find(i=>i.id===ing.itemId);
