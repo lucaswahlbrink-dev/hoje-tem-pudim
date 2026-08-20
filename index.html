@@ -720,6 +720,8 @@
         <label>Rende quantas un.</label>
         <input type="number" id="inputFormatoRendimento" placeholder="Rende quantas un." class="mono">
         <p class="section-note" style="margin-top:-8px;" id="notaMultiplicadorFormato"></p>
+        <label>Outras embalagens usadas nesse formato (opcional — ex: guardanapo, colher, sacola)</label>
+        <div id="formatoEmbalagensExtrasArea"></div>
         <div class="row" style="margin-bottom:10px;">
           <button class="btn-secondary" id="btnConfirmarFormato">OK</button>
           <button class="btn-ghost" id="btnFecharAddFormato">Cancelar</button>
@@ -814,23 +816,8 @@
       </div>
       <div id="precifDetalheComponentes" class="detalhe-custo hidden"></div>
 
-      <div class="divider-label">🎁 Embalagens desta receita</div>
-      <div id="precifEmbalagemSelecionadaLista"></div>
-      <button class="btn-ghost btn-small" id="btnAbrirAddEmbalagemPrecif" style="margin:6px 0 10px 0;">+ Adicionar embalagem</button>
-      <div id="embalagemPrecifAddArea" class="hidden" style="margin-bottom:10px;">
-        <div class="row" style="margin-bottom:8px;">
-          <select id="selectEmbalagemPrecif"></select>
-          <input type="number" id="inputEmbalagemPrecifQtd" placeholder="Qtd" class="mono" value="1" style="max-width:70px;flex:none;">
-        </div>
-        <div class="row">
-          <button class="btn-secondary" id="btnConfirmarAddEmbalagemPrecif">OK</button>
-          <button class="btn-ghost" id="btnCancelarAddEmbalagemPrecif">Cancelar</button>
-        </div>
-      </div>
-      <div class="summary-line"><span>Custo de embalagem</span><span class="mono" id="precifCustoEmbalagem">R$ 0,00</span></div>
-
       <div class="summary-line"><span>Custo fixo (energia etc)</span><span class="mono" id="precifCustoFixo">R$ 0,00</span></div>
-      <div class="summary-line total"><span>Custo total do lote</span><span class="mono" id="precifCustoTotal">R$ 0,00</span></div>
+      <div class="summary-line total"><span>Custo total do lote (sem embalagem, que é por formato)</span><span class="mono" id="precifCustoTotal">R$ 0,00</span></div>
 
       <div class="divider-label">💲 Preço por formato de venda</div>
       <div id="precifFormatosResultado"></div>
@@ -1084,6 +1071,7 @@ function editarFormatoTemp(idx){
   renderSelectFormatoEmbalagem();
   document.getElementById('selectFormatoEmbalagem').value = f.embalagemVinculadaId||'';
   atualizarNotaMultiplicadorFormato();
+  renderEmbalagemChecklist('formatoEmbalagensExtrasArea', embalagemArrayToMap(f.embalagensExtras||[]), null);
   document.getElementById('btnConfirmarFormato').textContent = 'Salvar alteração';
   document.getElementById('formatoAddArea').classList.remove('hidden');
 }
@@ -1121,6 +1109,7 @@ document.getElementById('btnAbrirAddFormato').addEventListener('click', ()=>{
   renderSelectFormatoEmbalagem();
   document.getElementById('selectFormatoEmbalagem').value = '';
   atualizarNotaMultiplicadorFormato();
+  renderEmbalagemChecklist('formatoEmbalagensExtrasArea', {}, null);
   document.getElementById('formatoAddArea').classList.remove('hidden');
 });
 document.getElementById('btnFecharAddFormato').addEventListener('click', ()=>{
@@ -1132,15 +1121,16 @@ document.getElementById('btnConfirmarFormato').addEventListener('click', ()=>{
   const nome = document.getElementById('inputFormatoNome').value.trim();
   const rendimento = parseFloat(document.getElementById('inputFormatoRendimento').value);
   const embalagemVinculadaId = document.getElementById('selectFormatoEmbalagem').value || null;
+  const embalagensExtras = lerEmbalagemChecklist('formatoEmbalagensExtrasArea');
   if(!nome || !rendimento){ showToast('Dê um nome e o rendimento do formato.'); return; }
   if(editandoFormatoIdx!==null){
     const idExistente = novaReceitaFormatosTemp[editandoFormatoIdx].id;
     const precoExistente = novaReceitaFormatosTemp[editandoFormatoIdx].precoVenda||0;
-    novaReceitaFormatosTemp[editandoFormatoIdx] = {id:idExistente, nome, rendimento, precoVenda:precoExistente, embalagemVinculadaId};
+    novaReceitaFormatosTemp[editandoFormatoIdx] = {id:idExistente, nome, rendimento, precoVenda:precoExistente, embalagemVinculadaId, embalagensExtras};
     editandoFormatoIdx = null;
     document.getElementById('btnConfirmarFormato').textContent = 'OK';
   }else{
-    novaReceitaFormatosTemp.push({id:uid(), nome, rendimento, precoVenda:0, embalagemVinculadaId});
+    novaReceitaFormatosTemp.push({id:uid(), nome, rendimento, precoVenda:0, embalagemVinculadaId, embalagensExtras});
   }
   document.getElementById('formatoAddArea').classList.add('hidden');
   renderNovaReceitaFormatos();
@@ -1212,16 +1202,21 @@ function custoEmbalagensSelecionadas(lista){
   });
   return total;
 }
-function custoEmbalagemReceita(r){
-  return custoEmbalagensSelecionadas(r.embalagemPadrao||[]);
-}
 function custoBaseReceita(r){
-  // ingredientes diretos + componentes reutilizáveis + energia, sem embalagem (embalagem varia por venda)
+  // ingredientes diretos + componentes reutilizáveis + energia, sem embalagem (embalagem é por formato agora)
   return custoItensReceita(r) + custoComponentesReceita(r) + custoFixoReceita(r);
 }
-function custoTotalReceita(r){
-  // usado na Precificação e nos gráficos por receita: inclui a embalagem padrão marcada
-  return custoBaseReceita(r) + custoEmbalagemReceita(r);
+
+// Custo de verdade de UMA unidade de um formato específico: ingredientes/energia (na escala certa
+// do formato) + embalagem vinculada (se tiver) + outras embalagens extras marcadas nesse formato.
+function custoUnidadeFormato(r, f){
+  const custoBase = custoBaseReceita(r);
+  const embVinculada = f.embalagemVinculadaId ? state.embalagens.find(e=>e.id===f.embalagemVinculadaId) : null;
+  const multiplicador = (embVinculada && embVinculada.multiplicadorReferenciaPadrao>0) ? embVinculada.multiplicadorReferenciaPadrao : 1;
+  const custoBasePorUnidade = (custoBase*multiplicador)/(f.rendimento||1);
+  const custoEmbVinculada = embVinculada ? embVinculada.precoUnitario : 0;
+  const custoExtras = custoEmbalagensSelecionadas(f.embalagensExtras||[]);
+  return custoBasePorUnidade + custoEmbVinculada + custoExtras;
 }
 
 // ---------- CHECKLIST DE EMBALAGENS (reutilizado na Precificação e nas Vendas) ----------
@@ -1645,9 +1640,16 @@ function calcularListaCompras(){
       }
     }
 
-    (r.embalagemPadrao||[]).forEach(emb=>{
-      precisaEmbalagem[emb.itemId] = (precisaEmbalagem[emb.itemId]||0) + emb.quantidade*n;
-    });
+    const primeiroFormato = (r.formatosVenda||[])[0];
+    if(primeiroFormato){
+      const qtdFormato = n * (primeiroFormato.rendimento||1);
+      if(primeiroFormato.embalagemVinculadaId){
+        precisaEmbalagem[primeiroFormato.embalagemVinculadaId] = (precisaEmbalagem[primeiroFormato.embalagemVinculadaId]||0) + qtdFormato;
+      }
+      (primeiroFormato.embalagensExtras||[]).forEach(emb=>{
+        precisaEmbalagem[emb.itemId] = (precisaEmbalagem[emb.itemId]||0) + emb.quantidade*qtdFormato;
+      });
+    }
   });
 
   const faltandoIngredientes = Object.keys(precisaIngrediente).map(itemId=>{
@@ -3568,8 +3570,6 @@ function renderPrecificacaoReceitas(){
   `).join('');
 }
 
-let precifEmbalagemTemp = [];
-
 function selecionarReceitaPrecificacao(id){
   if(receitaSelecionadaId === id){
     receitaSelecionadaId = null;
@@ -3588,66 +3588,8 @@ function calcularPrecificacao(){
   if(!r){ card.style.display='none'; return; }
   card.style.display='block';
   document.getElementById('precifTitulo').textContent = 'Precificação — ' + r.nome;
-
-  precifEmbalagemTemp = (r.embalagemPadrao||[]).map(e=>({...e}));
-  renderPrecifEmbalagemSelecionada();
-  document.getElementById('embalagemPrecifAddArea').classList.add('hidden');
-
   atualizarTotaisPrecificacao();
 }
-
-function renderPrecifEmbalagemSelecionada(){
-  const el = document.getElementById('precifEmbalagemSelecionadaLista');
-  if(precifEmbalagemTemp.length===0){
-    el.innerHTML = `<div class="section-note" style="margin:0 0 8px 0;">Nenhuma embalagem adicionada ainda.</div>`;
-    return;
-  }
-  el.innerHTML = precifEmbalagemTemp.map((sel,idx)=>{
-    const emb = state.embalagens.find(e=>e.id===sel.itemId);
-    const nome = emb ? emb.nome : 'Embalagem removida';
-    const custo = emb ? emb.precoUnitario*sel.quantidade : 0;
-    return `
-    <div class="ingredient-item">
-      <span>${escapeHtml(nome)} — ${sel.quantidade}un <span class="item-sub mono">(${brl(custo)})</span></span>
-      <button class="btn-danger-ghost" onclick="removerEmbalagemPrecifTemp(${idx})">remover</button>
-    </div>`;
-  }).join('');
-}
-function removerEmbalagemPrecifTemp(idx){
-  precifEmbalagemTemp.splice(idx,1);
-  renderPrecifEmbalagemSelecionada();
-  atualizarTotaisPrecificacao();
-}
-
-function renderSelectEmbalagemPrecif(){
-  const sel = document.getElementById('selectEmbalagemPrecif');
-  const disponiveis = state.embalagens;
-  if(disponiveis.length===0){
-    sel.innerHTML = `<option value="">Nenhuma embalagem disponível</option>`;
-    return;
-  }
-  sel.innerHTML = disponiveis.map(e=>`<option value="${e.id}">${escapeHtml(e.nome)} (${brl(e.precoUnitario)}/un)</option>`).join('');
-}
-
-document.getElementById('btnAbrirAddEmbalagemPrecif').addEventListener('click', ()=>{
-  renderSelectEmbalagemPrecif();
-  document.getElementById('inputEmbalagemPrecifQtd').value = 1;
-  document.getElementById('embalagemPrecifAddArea').classList.remove('hidden');
-});
-document.getElementById('btnCancelarAddEmbalagemPrecif').addEventListener('click', ()=>{
-  document.getElementById('embalagemPrecifAddArea').classList.add('hidden');
-});
-document.getElementById('btnConfirmarAddEmbalagemPrecif').addEventListener('click', ()=>{
-  const itemId = document.getElementById('selectEmbalagemPrecif').value;
-  const qtd = parseFloat(document.getElementById('inputEmbalagemPrecifQtd').value)||1;
-  if(!itemId){ showToast('Escolha uma embalagem.'); return; }
-  const existente = precifEmbalagemTemp.find(e=>e.itemId===itemId);
-  if(existente){ existente.quantidade += qtd; }
-  else{ precifEmbalagemTemp.push({itemId, quantidade:qtd}); }
-  renderPrecifEmbalagemSelecionada();
-  atualizarTotaisPrecificacao();
-  document.getElementById('embalagemPrecifAddArea').classList.add('hidden');
-});
 
 function detalheIngredientesEscalados(listaIngredientes, arrayItens, multiplicador){
   return (listaIngredientes||[]).map(ing=>{
@@ -3661,7 +3603,7 @@ function detalheIngredientesEscalados(listaIngredientes, arrayItens, multiplicad
   }).join('');
 }
 
-function renderFormatosPrecificacao(r, custoBase, custoEmbalagemCompartilhada){
+function renderFormatosPrecificacao(r, custoBase){
   const el = document.getElementById('precifFormatosResultado');
   if(!r.formatosVenda || r.formatosVenda.length===0){
     el.innerHTML = `<div class="section-note">Nenhum formato de venda cadastrado para esta receita. Toque em "editar" na receita para adicionar (ex: Fatia, Pote 500ml).</div>`;
@@ -3672,20 +3614,22 @@ function renderFormatosPrecificacao(r, custoBase, custoEmbalagemCompartilhada){
     const multiplicador = (embVinculada && embVinculada.multiplicadorReferenciaPadrao>0) ? embVinculada.multiplicadorReferenciaPadrao : 1;
     const custoBaseDoFormato = custoBase * multiplicador;
     const custoBasePorUnidade = custoBaseDoFormato/(f.rendimento||1);
-    const custoUnidade = embVinculada
-      ? custoBasePorUnidade + embVinculada.precoUnitario
-      : (custoBaseDoFormato + custoEmbalagemCompartilhada)/(f.rendimento||1);
+    const custoExtras = custoEmbalagensSelecionadas(f.embalagensExtras||[]);
+    const custoUnidade = custoBasePorUnidade + (embVinculada ? embVinculada.precoUnitario : 0) + custoExtras;
     const lucro = (f.precoVenda||0) - custoUnidade;
     const notaMultiplicador = multiplicador!==1 ? ` (baseado em ${multiplicador}x a receita)` : '';
     const itensEscaladosHtml = multiplicador!==1
       ? `<div class="detalhe-linha" style="font-weight:600;color:var(--caramel-deep);"><span>Itens em ${multiplicador}x a receita:</span><span></span></div>` + detalheIngredientesEscalados(r.ingredientes, state.custosItens, multiplicador)
       : '';
-    const detalheHtml = embVinculada
-      ? `${itensEscaladosHtml}
-         <div class="detalhe-linha"><span>Ingredientes/energia${notaMultiplicador} (÷${f.rendimento})</span><span class="mono">${brl(custoBasePorUnidade)}</span></div>
-         <div class="detalhe-linha"><span>🎁 ${escapeHtml(embVinculada.nome)}</span><span class="mono">${brl(embVinculada.precoUnitario)}</span></div>`
-      : `${itensEscaladosHtml}
-         <div class="detalhe-linha"><span>Ingredientes/energia + embalagem compartilhada${notaMultiplicador} (÷${f.rendimento})</span><span class="mono">${brl(custoUnidade)}</span></div>`;
+    const extrasHtml = (f.embalagensExtras||[]).map(sel=>{
+      const emb = state.embalagens.find(e=>e.id===sel.itemId);
+      if(!emb) return '';
+      return `<div class="detalhe-linha"><span>🎁 ${escapeHtml(emb.nome)} (${sel.quantidade}un)</span><span class="mono">${brl(emb.precoUnitario*sel.quantidade)}</span></div>`;
+    }).join('');
+    const detalheHtml = `${itensEscaladosHtml}
+      <div class="detalhe-linha"><span>Ingredientes/energia${notaMultiplicador} (÷${f.rendimento})</span><span class="mono">${brl(custoBasePorUnidade)}</span></div>
+      ${embVinculada ? `<div class="detalhe-linha"><span>🎁 ${escapeHtml(embVinculada.nome)}</span><span class="mono">${brl(embVinculada.precoUnitario)}</span></div>` : ''}
+      ${extrasHtml}`;
     return `
     <div class="formato-preco-card">
       <div class="formato-preco-header"><strong>${escapeHtml(f.nome)}</strong> <span class="item-sub">(lote rende ${f.rendimento}${embVinculada?' · 🎁 '+escapeHtml(embVinculada.nome)+' incluída no custo':''}${notaMultiplicador})</span></div>
@@ -3712,10 +3656,8 @@ function atualizarTotaisPrecificacao(){
   if(!r) return;
   const custoItens = custoItensReceita(r);
   const custoComponentes = custoComponentesReceita(r);
-  const custoEmbalagem = custoEmbalagensSelecionadas(precifEmbalagemTemp);
   const custoFixo = custoFixoReceita(r);
   const custoBase = custoItens + custoComponentes + custoFixo;
-  const custoTotal = custoBase + custoEmbalagem;
 
   let avisos = verificarConversoesIncertas(r.ingredientes, state.custosItens, '', 'direto');
   if(r.calda && r.calda.componenteId){
@@ -3742,11 +3684,10 @@ function atualizarTotaisPrecificacao(){
 
   document.getElementById('precifCustoIngredientes').textContent = brl(custoItens);
   document.getElementById('precifCustoComponentes').textContent = brl(custoComponentes);
-  document.getElementById('precifCustoEmbalagem').textContent = brl(custoEmbalagem);
   document.getElementById('precifCustoFixo').textContent = brl(custoFixo);
-  document.getElementById('precifCustoTotal').textContent = brl(custoTotal);
+  document.getElementById('precifCustoTotal').textContent = brl(custoBase);
 
-  renderFormatosPrecificacao(r, custoBase, custoEmbalagem);
+  renderFormatosPrecificacao(r, custoBase);
 }
 
 document.getElementById('btnSalvarPrecos').addEventListener('click', ()=>{
@@ -3756,7 +3697,6 @@ document.getElementById('btnSalvarPrecos').addEventListener('click', ()=>{
     const f = (r.formatosVenda||[]).find(x=>x.id===inp.dataset.formatoId);
     if(f) f.precoVenda = parseFloat(inp.value)||0;
   });
-  r.embalagemPadrao = precifEmbalagemTemp.map(e=>({...e}));
   saveState().then(ok=>{
     if(ok){ showToast('Precificação salva.'); calcularPrecificacao(); }
   });
@@ -4102,8 +4042,7 @@ function renderPainel(){
     destruirChart('margem');
   }else{
     const margens = receitasComPreco.map(({r,formato})=>{
-      const custoTotal = custoTotalReceita(r);
-      const custoUnidade = custoTotal/(formato.rendimento||1);
+      const custoUnidade = custoUnidadeFormato(r, formato);
       return ((formato.precoVenda - custoUnidade)/formato.precoVenda)*100;
     });
     const media = margens.reduce((s,m)=>s+m,0)/margens.length;
