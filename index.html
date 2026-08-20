@@ -3592,15 +3592,31 @@ function calcularPrecificacao(){
 }
 
 function detalheIngredientesEscalados(listaIngredientes, arrayItens, multiplicador){
-  return (listaIngredientes||[]).map(ing=>{
+  let total = 0;
+  const linhas = (listaIngredientes||[]).map(ing=>{
     const item = arrayItens.find(i=>i.id===ing.itemId);
     if(!item){
       return `<div class="detalhe-linha" style="color:#A64545;"><span>⚠️ "${escapeHtml(ing.nome)}" não encontrado</span><span></span></div>`;
     }
     const qtdEscalada = arredondarCompra(ing.quantidade*multiplicador);
     const custoEscalado = custoConvertido(item, qtdEscalada, ing.unidade);
+    total += custoEscalado;
     return `<div class="detalhe-linha"><span>${escapeHtml(item.nome)} (${qtdEscalada}${ing.unidade||''})</span><span class="mono">${brl(custoEscalado)}</span></div>`;
   }).join('');
+  return linhas + `<div class="detalhe-linha" style="font-weight:700;border-top:1px solid var(--border);padding-top:4px;"><span>Total dos ingredientes diretos</span><span class="mono">${brl(total)}</span></div>`;
+}
+
+function toggleAddEmbalagemFormatoPrecif(formatoId){
+  const r = state.receitas.find(x=>x.id===receitaSelecionadaId);
+  const f = r ? (r.formatosVenda||[]).find(x=>x.id===formatoId) : null;
+  if(!f) return;
+  const area = document.getElementById('precifExtrasChecklist-'+formatoId);
+  if(area.classList.contains('hidden')){
+    renderEmbalagemChecklist('precifExtrasChecklist-'+formatoId, embalagemArrayToMap(f.embalagensExtras||[]), null);
+    area.classList.remove('hidden');
+  }else{
+    area.classList.add('hidden');
+  }
 }
 
 function renderFormatosPrecificacao(r, custoBase){
@@ -3634,6 +3650,9 @@ function renderFormatosPrecificacao(r, custoBase){
     <div class="formato-preco-card">
       <div class="formato-preco-header"><strong>${escapeHtml(f.nome)}</strong> <span class="item-sub">(lote rende ${f.rendimento}${embVinculada?' · 🎁 '+escapeHtml(embVinculada.nome)+' incluída no custo':''}${notaMultiplicador})</span></div>
       <div class="detalhe-custo" style="margin-top:0;">${detalheHtml}</div>
+      <div id="precifExtrasArea-${f.id}"></div>
+      <button class="btn-ghost btn-small" onclick="toggleAddEmbalagemFormatoPrecif('${f.id}')" style="margin-bottom:8px;">+ Adicionar embalagem</button>
+      <div id="precifExtrasChecklist-${f.id}" class="hidden" style="margin-bottom:10px;"></div>
       <label>Preço de venda</label>
       <input type="number" class="mono formato-preco-input" data-formato-id="${f.id}" data-custo-unidade="${custoUnidade}" value="${f.precoVenda||''}" placeholder="0,00">
       <div class="result-grid">
@@ -3696,6 +3715,12 @@ document.getElementById('btnSalvarPrecos').addEventListener('click', ()=>{
   document.querySelectorAll('.formato-preco-input').forEach(inp=>{
     const f = (r.formatosVenda||[]).find(x=>x.id===inp.dataset.formatoId);
     if(f) f.precoVenda = parseFloat(inp.value)||0;
+  });
+  (r.formatosVenda||[]).forEach(f=>{
+    const checklistEl = document.getElementById('precifExtrasChecklist-'+f.id);
+    if(checklistEl && !checklistEl.classList.contains('hidden')){
+      f.embalagensExtras = lerEmbalagemChecklist('precifExtrasChecklist-'+f.id);
+    }
   });
   saveState().then(ok=>{
     if(ok){ showToast('Precificação salva.'); calcularPrecificacao(); }
