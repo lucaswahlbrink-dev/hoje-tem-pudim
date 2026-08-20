@@ -716,6 +716,9 @@
         <select id="selectFormatoEmbalagem"></select>
         <label>Rende quantas un.</label>
         <input type="number" id="inputFormatoRendimento" placeholder="Rende quantas un." class="mono">
+        <label>Essa forma normalmente é feita fazendo quantas vezes a receita original?</label>
+        <input type="number" id="inputFormatoMultiplicador" class="mono" value="1" step="0.5" min="0.1">
+        <p class="section-note" style="margin-top:-8px;">Ex: se essa forma só sai de um lote 4x maior (tipo um pudim grande cortado em fatias), coloque 4 aqui, pra Precificação calcular o custo certo dessa forma.</p>
         <div class="row" style="margin-bottom:10px;">
           <button class="btn-secondary" id="btnConfirmarFormato">OK</button>
           <button class="btn-ghost" id="btnFecharAddFormato">Cancelar</button>
@@ -1055,7 +1058,7 @@ function renderNovaReceitaFormatos(){
         const emb = f.embalagemVinculadaId ? state.embalagens.find(e=>e.id===f.embalagemVinculadaId) : null;
         return `
         <tr class="draggable-row" data-id="${f.id}">
-          <td>${escapeHtml(f.nome)}${emb?`<div class="item-sub">🎁 ${escapeHtml(emb.nome)}</div>`:''}</td>
+          <td>${escapeHtml(f.nome)}${emb?`<div class="item-sub">🎁 ${escapeHtml(emb.nome)}</div>`:''}${(f.multiplicadorReferencia && f.multiplicadorReferencia!==1)?`<div class="item-sub">parte de ${f.multiplicadorReferencia}x a receita</div>`:''}</td>
           <td class="num mono">${f.rendimento} un</td>
           <td class="acoes">
             <button class="btn-ghost" onclick="editarFormatoTemp(${idx})">editar</button>
@@ -1077,6 +1080,7 @@ function editarFormatoTemp(idx){
   editandoFormatoIdx = idx;
   document.getElementById('inputFormatoNome').value = f.nome;
   document.getElementById('inputFormatoRendimento').value = f.rendimento;
+  document.getElementById('inputFormatoMultiplicador').value = f.multiplicadorReferencia||1;
   renderSelectFormatoEmbalagem();
   document.getElementById('selectFormatoEmbalagem').value = f.embalagemVinculadaId||'';
   document.getElementById('btnConfirmarFormato').textContent = 'Salvar alteração';
@@ -1084,19 +1088,19 @@ function editarFormatoTemp(idx){
 }
 function renderSelectFormatoEmbalagem(){
   const sel = document.getElementById('selectFormatoEmbalagem');
-  const comCapacidade = state.embalagens.filter(e=>e.capacidadeMl>0);
   sel.innerHTML = `<option value="">Nenhuma (digitar rendimento na mão)</option>` +
-    comCapacidade.map(e=>`<option value="${e.id}">${escapeHtml(e.nome)} (${e.capacidadeMl}ml)</option>`).join('');
+    state.embalagens.map(e=>`<option value="${e.id}">${escapeHtml(e.nome)}${e.capacidadeMl>0 ? ' ('+e.capacidadeMl+'ml)' : ''}</option>`).join('');
 }
 document.getElementById('selectFormatoEmbalagem').addEventListener('change', ()=>{
   const embId = document.getElementById('selectFormatoEmbalagem').value;
   if(!embId) return;
   const emb = state.embalagens.find(e=>e.id===embId);
+  if(!emb || !(emb.capacidadeMl>0)) return; // sem capacidade configurada, sem cálculo automático, rendimento continua manual
   const rendimentoMistura = parseFloat(document.getElementById('novaReceitaRendimentoMistura').value)||0;
-  if(emb && emb.capacidadeMl>0 && rendimentoMistura>0){
+  if(rendimentoMistura>0){
     document.getElementById('inputFormatoRendimento').value = Math.floor(rendimentoMistura/emb.capacidadeMl);
-  }else if(!rendimentoMistura){
-    showToast('Preencha o rendimento da mistura (em ml) primeiro, para calcular sozinho.');
+  }else{
+    showToast('Preencha o rendimento da mistura (em ml) primeiro, para calcular o rendimento sozinho a partir dessa embalagem.');
   }
 });
 document.getElementById('btnAbrirAddFormato').addEventListener('click', ()=>{
@@ -1104,6 +1108,7 @@ document.getElementById('btnAbrirAddFormato').addEventListener('click', ()=>{
   document.getElementById('btnConfirmarFormato').textContent = 'OK';
   document.getElementById('inputFormatoNome').value = '';
   document.getElementById('inputFormatoRendimento').value = '';
+  document.getElementById('inputFormatoMultiplicador').value = '1';
   renderSelectFormatoEmbalagem();
   document.getElementById('selectFormatoEmbalagem').value = '';
   document.getElementById('formatoAddArea').classList.remove('hidden');
@@ -1117,15 +1122,16 @@ document.getElementById('btnConfirmarFormato').addEventListener('click', ()=>{
   const nome = document.getElementById('inputFormatoNome').value.trim();
   const rendimento = parseFloat(document.getElementById('inputFormatoRendimento').value);
   const embalagemVinculadaId = document.getElementById('selectFormatoEmbalagem').value || null;
+  const multiplicadorReferencia = parseFloat(document.getElementById('inputFormatoMultiplicador').value)||1;
   if(!nome || !rendimento){ showToast('Dê um nome e o rendimento do formato.'); return; }
   if(editandoFormatoIdx!==null){
     const idExistente = novaReceitaFormatosTemp[editandoFormatoIdx].id;
     const precoExistente = novaReceitaFormatosTemp[editandoFormatoIdx].precoVenda||0;
-    novaReceitaFormatosTemp[editandoFormatoIdx] = {id:idExistente, nome, rendimento, precoVenda:precoExistente, embalagemVinculadaId};
+    novaReceitaFormatosTemp[editandoFormatoIdx] = {id:idExistente, nome, rendimento, precoVenda:precoExistente, embalagemVinculadaId, multiplicadorReferencia};
     editandoFormatoIdx = null;
     document.getElementById('btnConfirmarFormato').textContent = 'OK';
   }else{
-    novaReceitaFormatosTemp.push({id:uid(), nome, rendimento, precoVenda:0, embalagemVinculadaId});
+    novaReceitaFormatosTemp.push({id:uid(), nome, rendimento, precoVenda:0, embalagemVinculadaId, multiplicadorReferencia});
   }
   document.getElementById('formatoAddArea').classList.add('hidden');
   renderNovaReceitaFormatos();
@@ -3638,18 +3644,21 @@ function renderFormatosPrecificacao(r, custoBase, custoEmbalagemCompartilhada){
   }
   el.innerHTML = r.formatosVenda.map(f=>{
     const embVinculada = f.embalagemVinculadaId ? state.embalagens.find(e=>e.id===f.embalagemVinculadaId) : null;
-    const custoBasePorUnidade = custoBase/(f.rendimento||1);
+    const multiplicador = f.multiplicadorReferencia||1;
+    const custoBaseDoFormato = custoBase * multiplicador;
+    const custoBasePorUnidade = custoBaseDoFormato/(f.rendimento||1);
     const custoUnidade = embVinculada
       ? custoBasePorUnidade + embVinculada.precoUnitario
-      : (custoBase + custoEmbalagemCompartilhada)/(f.rendimento||1);
+      : (custoBaseDoFormato + custoEmbalagemCompartilhada)/(f.rendimento||1);
     const lucro = (f.precoVenda||0) - custoUnidade;
+    const notaMultiplicador = multiplicador!==1 ? ` (baseado em ${multiplicador}x a receita)` : '';
     const detalheHtml = embVinculada
-      ? `<div class="detalhe-linha"><span>Ingredientes/energia (÷${f.rendimento})</span><span class="mono">${brl(custoBasePorUnidade)}</span></div>
+      ? `<div class="detalhe-linha"><span>Ingredientes/energia${notaMultiplicador} (÷${f.rendimento})</span><span class="mono">${brl(custoBasePorUnidade)}</span></div>
          <div class="detalhe-linha"><span>🎁 ${escapeHtml(embVinculada.nome)}</span><span class="mono">${brl(embVinculada.precoUnitario)}</span></div>`
-      : `<div class="detalhe-linha"><span>Ingredientes/energia + embalagem compartilhada (÷${f.rendimento})</span><span class="mono">${brl(custoUnidade)}</span></div>`;
+      : `<div class="detalhe-linha"><span>Ingredientes/energia + embalagem compartilhada${notaMultiplicador} (÷${f.rendimento})</span><span class="mono">${brl(custoUnidade)}</span></div>`;
     return `
     <div class="formato-preco-card">
-      <div class="formato-preco-header"><strong>${escapeHtml(f.nome)}</strong> <span class="item-sub">(lote rende ${f.rendimento}${embVinculada?' · 🎁 '+escapeHtml(embVinculada.nome)+' incluída no custo':''})</span></div>
+      <div class="formato-preco-header"><strong>${escapeHtml(f.nome)}</strong> <span class="item-sub">(lote rende ${f.rendimento}${embVinculada?' · 🎁 '+escapeHtml(embVinculada.nome)+' incluída no custo':''}${notaMultiplicador})</span></div>
       <div class="detalhe-custo" style="margin-top:0;">${detalheHtml}</div>
       <label>Preço de venda</label>
       <input type="number" class="mono formato-preco-input" data-formato-id="${f.id}" data-custo-unidade="${custoUnidade}" value="${f.precoVenda||''}" placeholder="0,00">
