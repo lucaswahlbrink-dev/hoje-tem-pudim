@@ -208,6 +208,10 @@
 
   .detalhe-custo{ margin:-4px 0 10px 0; }
   .detalhe-linha{ display:flex; justify-content:space-between; font-size:12px; color:var(--muted); padding:3px 0 3px 12px; }
+  .detalhe-secao-titulo{ font-weight:700; font-size:12px; color:var(--caramel-deep); text-transform:uppercase; letter-spacing:.02em; margin:10px 0 2px 0; }
+  .detalhe-secao-titulo:first-child{ margin-top:0; }
+  .detalhe-linha.detalhe-total{ font-weight:700; color:var(--ink); border-top:1px solid var(--border); padding-top:5px; margin-top:2px; }
+  .detalhe-linha.detalhe-sub{ font-style:italic; opacity:0.85; }
 
   .acc-toggle{ cursor:pointer; user-select:none; }
   .acc-chevron{ display:inline-block; font-size:11px; color:var(--muted); transition:transform .2s ease; margin-left:2px; }
@@ -638,6 +642,9 @@
           <label>Formatos com essa embalagem normalmente partem de quantas vezes a receita? (opcional)</label>
           <input type="number" id="manualEmbMultiplicador" class="mono" placeholder="Ex: 4 (deixe em branco = 1x, o padrão)">
           <p class="section-note" style="margin-top:-8px;">Preenchendo isso, sempre que você vincular essa embalagem a um formato de venda, esse número já vem preenchido sozinho na Precificação.</p>
+          <label>Horas de forno para essa fornada (opcional)</label>
+          <input type="number" id="manualEmbHorasForno" class="mono" placeholder="Deixe em branco para usar as horas da receita, sem multiplicar">
+          <p class="section-note" style="margin-top:-8px;">A energia é sempre de UMA fornada só, nunca multiplica pelo tamanho da receita. Preenche aqui só se essa fornada específica (ex: a forma grande) leva mais ou menos horas que o normal da receita.</p>
           <div class="row">
             <button class="btn-primary" id="btnSalvarEmbalagemManual">Salvar embalagem</button>
             <button class="btn-ghost" id="btnCancelarEmbalagemManual">Cancelar</button>
@@ -1179,10 +1186,13 @@ document.getElementById('btnUndo').addEventListener('click', ()=>{
   });
 });
 
+function custoEnergiaPorHoras(horas){
+  const potenciaKw = (state.config.potenciaForno||1800)/1000;
+  return (horas||0) * potenciaKw * (state.config.valorKwh||0);
+}
 function custoFixoReceita(r){
   if(r.horasForno!==undefined && r.horasForno!==null && r.horasForno!==''){
-    const potenciaKw = (state.config.potenciaForno||1800)/1000;
-    return r.horasForno * potenciaKw * (state.config.valorKwh||0);
+    return custoEnergiaPorHoras(r.horasForno);
   }
   return r.custoFixoPorFornada||0; // compatibilidade com receitas antigas
 }
@@ -1210,10 +1220,12 @@ function custoBaseReceita(r){
 // Custo de verdade de UMA unidade de um formato específico: ingredientes/energia (na escala certa
 // do formato) + embalagem vinculada (se tiver) + outras embalagens extras marcadas nesse formato.
 function custoUnidadeFormato(r, f){
-  const custoBase = custoBaseReceita(r);
+  const custoIngredComp = custoItensReceita(r) + custoComponentesReceita(r);
   const embVinculada = f.embalagemVinculadaId ? state.embalagens.find(e=>e.id===f.embalagemVinculadaId) : null;
   const multiplicador = (embVinculada && embVinculada.multiplicadorReferenciaPadrao>0) ? embVinculada.multiplicadorReferenciaPadrao : 1;
-  const custoBasePorUnidade = (custoBase*multiplicador)/(f.rendimento||1);
+  const horasFornoFormato = (embVinculada && embVinculada.horasFornoPadrao>0) ? embVinculada.horasFornoPadrao : r.horasForno;
+  const custoEnergiaFormato = custoEnergiaPorHoras(horasFornoFormato);
+  const custoBasePorUnidade = (custoIngredComp*multiplicador + custoEnergiaFormato)/(f.rendimento||1);
   const custoEmbVinculada = embVinculada ? embVinculada.precoUnitario : 0;
   const custoExtras = custoEmbalagensSelecionadas(f.embalagensExtras||[]);
   return custoBasePorUnidade + custoEmbVinculada + custoExtras;
@@ -2262,6 +2274,7 @@ function editarEmbalagem(id){
   document.getElementById('manualEmbEstoque').value = item.estoqueAtual||0;
   document.getElementById('manualEmbCapacidade').value = item.capacidadeMl||'';
   document.getElementById('manualEmbMultiplicador').value = item.multiplicadorReferenciaPadrao||'';
+  document.getElementById('manualEmbHorasForno').value = item.horasFornoPadrao||'';
   document.getElementById('btnSalvarEmbalagemManual').textContent = 'Salvar alterações';
   document.getElementById('manualEmbalagemForm').classList.remove('hidden');
   document.getElementById('manualEmbalagemForm').scrollIntoView({behavior:'smooth'});
@@ -2273,6 +2286,7 @@ document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()
   const estoque = parseFloat(document.getElementById('manualEmbEstoque').value)||0;
   const capacidadeMl = parseFloat(document.getElementById('manualEmbCapacidade').value)||null;
   const multiplicadorReferenciaPadrao = parseFloat(document.getElementById('manualEmbMultiplicador').value)||null;
+  const horasFornoPadrao = parseFloat(document.getElementById('manualEmbHorasForno').value)||null;
   if(!nome){ showToast('Dê um nome para a embalagem.'); return; }
 
   if(embalagemEditandoId){
@@ -2284,6 +2298,7 @@ document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()
       item.estoqueAtual = estoque;
       item.capacidadeMl = capacidadeMl;
       item.multiplicadorReferenciaPadrao = multiplicadorReferenciaPadrao;
+      item.horasFornoPadrao = horasFornoPadrao;
       if(precoMudou){
         item.ultimaAtualizacao = new Date().toISOString();
         if(!item.historico) item.historico = [];
@@ -2297,7 +2312,7 @@ document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()
   }
 
   const agora = new Date().toISOString();
-  state.embalagens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, capacidadeMl, multiplicadorReferenciaPadrao, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
+  state.embalagens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, capacidadeMl, multiplicadorReferenciaPadrao, horasFornoPadrao, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
   limparFormularioEmbalagem();
   saveState().then(()=>{ renderItensBase('embalagem'); showToast('Embalagem adicionada.'); });
 });
@@ -2308,6 +2323,7 @@ function limparFormularioEmbalagem(){
   document.getElementById('manualEmbEstoque').value='';
   document.getElementById('manualEmbCapacidade').value='';
   document.getElementById('manualEmbMultiplicador').value='';
+  document.getElementById('manualEmbHorasForno').value='';
   document.getElementById('calcEmbPrecoTotal').value='';
   document.getElementById('calcEmbEmbalagens').value='';
   document.getElementById('calcEmbUnidadesPorEmbalagem').value='';
@@ -3591,35 +3607,39 @@ function calcularPrecificacao(){
   atualizarTotaisPrecificacao();
 }
 
-function detalheIngredientesEscalados(listaIngredientes, arrayItens, multiplicador){
-  let total = 0;
-  const linhas = (listaIngredientes||[]).map(ing=>{
-    const item = arrayItens.find(i=>i.id===ing.itemId);
-    if(!item){
-      return `<div class="detalhe-linha" style="color:#A64545;"><span>⚠️ "${escapeHtml(ing.nome)}" não encontrado</span><span></span></div>`;
-    }
-    const qtdEscalada = arredondarCompra(ing.quantidade*multiplicador);
-    const custoEscalado = custoConvertido(item, qtdEscalada, ing.unidade);
-    total += custoEscalado;
-    return `<div class="detalhe-linha"><span>${escapeHtml(item.nome)} (${qtdEscalada}${ing.unidade||''})</span><span class="mono">${brl(custoEscalado)}</span></div>`;
-  }).join('');
-  return linhas + `<div class="detalhe-linha" style="font-weight:700;border-top:1px solid var(--border);padding-top:4px;"><span>Total dos ingredientes diretos</span><span class="mono">${brl(total)}</span></div>`;
-}
-
 function toggleAddEmbalagemFormatoPrecif(formatoId){
   const r = state.receitas.find(x=>x.id===receitaSelecionadaId);
   const f = r ? (r.formatosVenda||[]).find(x=>x.id===formatoId) : null;
   if(!f) return;
   const area = document.getElementById('precifExtrasChecklist-'+formatoId);
   if(area.classList.contains('hidden')){
-    renderEmbalagemChecklist('precifExtrasChecklist-'+formatoId, embalagemArrayToMap(f.embalagensExtras||[]), null);
+    renderEmbalagemChecklist('precifExtrasChecklist-'+formatoId, embalagemArrayToMap(f.embalagensExtras||[]), ()=>atualizarCustoFormatoLive(r, f));
     area.classList.remove('hidden');
   }else{
     area.classList.add('hidden');
   }
 }
 
-function renderFormatosPrecificacao(r, custoBase){
+function atualizarCustoFormatoLive(r, f){
+  const custoIngredComp = custoItensReceita(r) + custoComponentesReceita(r);
+  const embVinculada = f.embalagemVinculadaId ? state.embalagens.find(e=>e.id===f.embalagemVinculadaId) : null;
+  const multiplicador = (embVinculada && embVinculada.multiplicadorReferenciaPadrao>0) ? embVinculada.multiplicadorReferenciaPadrao : 1;
+  const horasFornoFormato = (embVinculada && embVinculada.horasFornoPadrao>0) ? embVinculada.horasFornoPadrao : r.horasForno;
+  const custoEnergiaFormato = custoEnergiaPorHoras(horasFornoFormato);
+  const custoBasePorUnidade = (custoIngredComp*multiplicador + custoEnergiaFormato)/(f.rendimento||1);
+  const extrasAtuais = lerEmbalagemChecklist('precifExtrasChecklist-'+f.id);
+  const custoExtras = custoEmbalagensSelecionadas(extrasAtuais);
+  const custoUnidade = custoBasePorUnidade + (embVinculada ? embVinculada.precoUnitario : 0) + custoExtras;
+  const inputPreco = document.querySelector(`.formato-preco-input[data-formato-id="${f.id}"]`);
+  if(inputPreco) inputPreco.dataset.custoUnidade = custoUnidade;
+  const custoEl = document.getElementById('formatoCusto-'+f.id);
+  if(custoEl) custoEl.textContent = brl(custoUnidade);
+  const preco = inputPreco ? (parseFloat(inputPreco.value)||0) : 0;
+  const lucroEl = document.getElementById('formatoLucro-'+f.id);
+  if(lucroEl) lucroEl.textContent = brl(preco-custoUnidade);
+}
+
+function renderFormatosPrecificacao(r){
   const el = document.getElementById('precifFormatosResultado');
   if(!r.formatosVenda || r.formatosVenda.length===0){
     el.innerHTML = `<div class="section-note">Nenhum formato de venda cadastrado para esta receita. Toque em "editar" na receita para adicionar (ex: Fatia, Pote 500ml).</div>`;
@@ -3628,27 +3648,91 @@ function renderFormatosPrecificacao(r, custoBase){
   el.innerHTML = r.formatosVenda.map(f=>{
     const embVinculada = f.embalagemVinculadaId ? state.embalagens.find(e=>e.id===f.embalagemVinculadaId) : null;
     const multiplicador = (embVinculada && embVinculada.multiplicadorReferenciaPadrao>0) ? embVinculada.multiplicadorReferenciaPadrao : 1;
-    const custoBaseDoFormato = custoBase * multiplicador;
-    const custoBasePorUnidade = custoBaseDoFormato/(f.rendimento||1);
-    const custoExtras = custoEmbalagensSelecionadas(f.embalagensExtras||[]);
-    const custoUnidade = custoBasePorUnidade + (embVinculada ? embVinculada.precoUnitario : 0) + custoExtras;
-    const lucro = (f.precoVenda||0) - custoUnidade;
+    const horasFornoFormato = (embVinculada && embVinculada.horasFornoPadrao>0) ? embVinculada.horasFornoPadrao : r.horasForno;
     const notaMultiplicador = multiplicador!==1 ? ` (baseado em ${multiplicador}x a receita)` : '';
-    const itensEscaladosHtml = multiplicador!==1
-      ? `<div class="detalhe-linha" style="font-weight:600;color:var(--caramel-deep);"><span>Itens em ${multiplicador}x a receita:</span><span></span></div>` + detalheIngredientesEscalados(r.ingredientes, state.custosItens, multiplicador)
-      : '';
-    const extrasHtml = (f.embalagensExtras||[]).map(sel=>{
-      const emb = state.embalagens.find(e=>e.id===sel.itemId);
-      if(!emb) return '';
-      return `<div class="detalhe-linha"><span>🎁 ${escapeHtml(emb.nome)} (${sel.quantidade}un)</span><span class="mono">${brl(emb.precoUnitario*sel.quantidade)}</span></div>`;
+    const notaHoras = (horasFornoFormato!==r.horasForno) ? ` — ${horasFornoFormato}h, específico dessa forma` : '';
+
+    // ---- Ingredientes diretos ----
+    let totalIngredientes = 0;
+    const linhasIngredientes = (r.ingredientes||[]).map(ing=>{
+      const item = state.custosItens.find(i=>i.id===ing.itemId);
+      if(!item) return `<div class="detalhe-linha" style="color:#A64545;"><span>⚠️ "${escapeHtml(ing.nome)}" não encontrado</span><span></span></div>`;
+      const qtdEscalada = arredondarCompra(ing.quantidade*multiplicador);
+      const custo = custoConvertido(item, qtdEscalada, ing.unidade);
+      totalIngredientes += custo;
+      return `<div class="detalhe-linha"><span>${escapeHtml(item.nome)} (${qtdEscalada}${ing.unidade||''})</span><span class="mono">${brl(custo)}</span></div>`;
     }).join('');
-    const detalheHtml = `${itensEscaladosHtml}
-      <div class="detalhe-linha"><span>Ingredientes/energia${notaMultiplicador} (÷${f.rendimento})</span><span class="mono">${brl(custoBasePorUnidade)}</span></div>
-      ${embVinculada ? `<div class="detalhe-linha"><span>🎁 ${escapeHtml(embVinculada.nome)}</span><span class="mono">${brl(embVinculada.precoUnitario)}</span></div>` : ''}
-      ${extrasHtml}`;
+    const totalIngredientesPorUnidade = totalIngredientes/(f.rendimento||1);
+
+    // ---- Calda (se a receita tiver) ----
+    let totalCalda = 0;
+    let linhasCalda = '';
+    let temCalda = false;
+    if(r.calda && r.calda.componenteId){
+      const comp = state.componentes.find(c=>c.id===r.calda.componenteId);
+      if(comp && comp.rendimentoQtd){
+        temCalda = true;
+        const proporcao = (r.calda.quantidade*multiplicador)/comp.rendimentoQtd;
+        linhasCalda = comp.ingredientes.map(ing=>{
+          const item = state.custosItens.find(i=>i.id===ing.itemId);
+          if(!item) return `<div class="detalhe-linha" style="color:#A64545;"><span>⚠️ "${escapeHtml(ing.nome)}" não encontrado</span><span></span></div>`;
+          const qtdEscalada = arredondarCompra(ing.quantidade*proporcao);
+          const custo = custoConvertido(item, qtdEscalada, ing.unidade);
+          totalCalda += custo;
+          return `<div class="detalhe-linha"><span>${escapeHtml(item.nome)} (${qtdEscalada}${ing.unidade||''})</span><span class="mono">${brl(custo)}</span></div>`;
+        }).join('');
+      }
+    }
+    const totalCaldaPorUnidade = totalCalda/(f.rendimento||1);
+
+    // ---- Energia ----
+    const custoEnergiaTotal = custoEnergiaPorHoras(horasFornoFormato);
+    const custoEnergiaPorUnidade = custoEnergiaTotal/(f.rendimento||1);
+
+    // ---- Embalagens (vinculada + extras) ----
+    let totalEmbalagens = 0;
+    let linhasEmbalagens = '';
+    if(embVinculada){
+      totalEmbalagens += embVinculada.precoUnitario;
+      linhasEmbalagens += `<div class="detalhe-linha"><span>${escapeHtml(embVinculada.nome)}</span><span class="mono">${brl(embVinculada.precoUnitario)}</span></div>`;
+    }
+    (f.embalagensExtras||[]).forEach(sel=>{
+      const emb = state.embalagens.find(e=>e.id===sel.itemId);
+      if(!emb) return;
+      const custo = emb.precoUnitario*sel.quantidade;
+      totalEmbalagens += custo;
+      linhasEmbalagens += `<div class="detalhe-linha"><span>${escapeHtml(emb.nome)} (${sel.quantidade}un)</span><span class="mono">${brl(custo)}</span></div>`;
+    });
+
+    const custoUnidade = totalIngredientesPorUnidade + totalCaldaPorUnidade + custoEnergiaPorUnidade + totalEmbalagens;
+    const lucro = (f.precoVenda||0) - custoUnidade;
+
+    const detalheHtml = `
+      <div class="detalhe-secao-titulo">Ingredientes diretos${notaMultiplicador}</div>
+      ${linhasIngredientes}
+      <div class="detalhe-linha detalhe-total"><span>Total</span><span class="mono">${brl(totalIngredientes)}</span></div>
+      <div class="detalhe-linha detalhe-sub"><span>Por unidade (÷${f.rendimento})</span><span class="mono">${brl(totalIngredientesPorUnidade)}</span></div>
+
+      ${temCalda ? `
+      <div class="detalhe-secao-titulo">Calda${notaMultiplicador}</div>
+      ${linhasCalda}
+      <div class="detalhe-linha detalhe-total"><span>Total</span><span class="mono">${brl(totalCalda)}</span></div>
+      <div class="detalhe-linha detalhe-sub"><span>Por unidade (÷${f.rendimento})</span><span class="mono">${brl(totalCaldaPorUnidade)}</span></div>
+      ` : ''}
+
+      <div class="detalhe-secao-titulo">Energia</div>
+      <div class="detalhe-linha"><span>Custo fixo — uma fornada só${notaHoras}</span><span class="mono">${brl(custoEnergiaTotal)}</span></div>
+      <div class="detalhe-linha detalhe-sub"><span>Por unidade (÷${f.rendimento})</span><span class="mono">${brl(custoEnergiaPorUnidade)}</span></div>
+
+      ${(embVinculada || (f.embalagensExtras||[]).length>0) ? `
+      <div class="detalhe-secao-titulo">Embalagens</div>
+      ${linhasEmbalagens}
+      <div class="detalhe-linha detalhe-total"><span>Total (já por unidade)</span><span class="mono">${brl(totalEmbalagens)}</span></div>
+      ` : ''}
+    `;
     return `
     <div class="formato-preco-card">
-      <div class="formato-preco-header"><strong>${escapeHtml(f.nome)}</strong> <span class="item-sub">(lote rende ${f.rendimento}${embVinculada?' · 🎁 '+escapeHtml(embVinculada.nome)+' incluída no custo':''}${notaMultiplicador})</span></div>
+      <div class="formato-preco-header"><strong>${escapeHtml(f.nome)}</strong> <span class="item-sub">(lote rende ${f.rendimento}${notaMultiplicador})</span></div>
       <div class="detalhe-custo" style="margin-top:0;">${detalheHtml}</div>
       <div id="precifExtrasArea-${f.id}"></div>
       <button class="btn-ghost btn-small" onclick="toggleAddEmbalagemFormatoPrecif('${f.id}')" style="margin-bottom:8px;">+ Adicionar embalagem</button>
@@ -3706,7 +3790,7 @@ function atualizarTotaisPrecificacao(){
   document.getElementById('precifCustoFixo').textContent = brl(custoFixo);
   document.getElementById('precifCustoTotal').textContent = brl(custoBase);
 
-  renderFormatosPrecificacao(r, custoBase);
+  renderFormatosPrecificacao(r);
 }
 
 document.getElementById('btnSalvarPrecos').addEventListener('click', ()=>{
