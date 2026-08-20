@@ -635,6 +635,9 @@
           <input type="number" id="manualEmbEstoque" placeholder="0">
           <label>Capacidade em ml (só para potes/embalagens que levam creme líquido, ex: 120)</label>
           <input type="number" id="manualEmbCapacidade" class="mono" placeholder="Deixe em branco se não se aplica">
+          <label>Formatos com essa embalagem normalmente partem de quantas vezes a receita? (opcional)</label>
+          <input type="number" id="manualEmbMultiplicador" class="mono" placeholder="Ex: 4 (deixe em branco = 1x, o padrão)">
+          <p class="section-note" style="margin-top:-8px;">Preenchendo isso, sempre que você vincular essa embalagem a um formato de venda, esse número já vem preenchido sozinho na Precificação.</p>
           <div class="row">
             <button class="btn-primary" id="btnSalvarEmbalagemManual">Salvar embalagem</button>
             <button class="btn-ghost" id="btnCancelarEmbalagemManual">Cancelar</button>
@@ -1095,7 +1098,11 @@ document.getElementById('selectFormatoEmbalagem').addEventListener('change', ()=
   const embId = document.getElementById('selectFormatoEmbalagem').value;
   if(!embId) return;
   const emb = state.embalagens.find(e=>e.id===embId);
-  if(!emb || !(emb.capacidadeMl>0)) return; // sem capacidade configurada, sem cálculo automático, rendimento continua manual
+  if(!emb) return;
+  if(emb.multiplicadorReferenciaPadrao>0){
+    document.getElementById('inputFormatoMultiplicador').value = emb.multiplicadorReferenciaPadrao;
+  }
+  if(!(emb.capacidadeMl>0)) return; // sem capacidade configurada, sem cálculo automático de rendimento, continua manual
   const rendimentoMistura = parseFloat(document.getElementById('novaReceitaRendimentoMistura').value)||0;
   if(rendimentoMistura>0){
     document.getElementById('inputFormatoRendimento').value = Math.floor(rendimentoMistura/emb.capacidadeMl);
@@ -2250,6 +2257,7 @@ function editarEmbalagem(id){
   document.getElementById('manualEmbPreco').value = item.precoUnitario;
   document.getElementById('manualEmbEstoque').value = item.estoqueAtual||0;
   document.getElementById('manualEmbCapacidade').value = item.capacidadeMl||'';
+  document.getElementById('manualEmbMultiplicador').value = item.multiplicadorReferenciaPadrao||'';
   document.getElementById('btnSalvarEmbalagemManual').textContent = 'Salvar alterações';
   document.getElementById('manualEmbalagemForm').classList.remove('hidden');
   document.getElementById('manualEmbalagemForm').scrollIntoView({behavior:'smooth'});
@@ -2260,6 +2268,7 @@ document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()
   const preco = parseFloat(document.getElementById('manualEmbPreco').value)||0;
   const estoque = parseFloat(document.getElementById('manualEmbEstoque').value)||0;
   const capacidadeMl = parseFloat(document.getElementById('manualEmbCapacidade').value)||null;
+  const multiplicadorReferenciaPadrao = parseFloat(document.getElementById('manualEmbMultiplicador').value)||null;
   if(!nome){ showToast('Dê um nome para a embalagem.'); return; }
 
   if(embalagemEditandoId){
@@ -2270,6 +2279,7 @@ document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()
       item.precoUnitario = preco;
       item.estoqueAtual = estoque;
       item.capacidadeMl = capacidadeMl;
+      item.multiplicadorReferenciaPadrao = multiplicadorReferenciaPadrao;
       if(precoMudou){
         item.ultimaAtualizacao = new Date().toISOString();
         if(!item.historico) item.historico = [];
@@ -2283,7 +2293,7 @@ document.getElementById('btnSalvarEmbalagemManual').addEventListener('click', ()
   }
 
   const agora = new Date().toISOString();
-  state.embalagens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, capacidadeMl, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
+  state.embalagens.push({id:uid(), nome, precoUnitario:preco, estoqueAtual:estoque, capacidadeMl, multiplicadorReferenciaPadrao, ultimaAtualizacao:agora, historico:[{data:agora, preco:preco}]});
   limparFormularioEmbalagem();
   saveState().then(()=>{ renderItensBase('embalagem'); showToast('Embalagem adicionada.'); });
 });
@@ -2293,6 +2303,7 @@ function limparFormularioEmbalagem(){
   document.getElementById('manualEmbPreco').value='';
   document.getElementById('manualEmbEstoque').value='';
   document.getElementById('manualEmbCapacidade').value='';
+  document.getElementById('manualEmbMultiplicador').value='';
   document.getElementById('calcEmbPrecoTotal').value='';
   document.getElementById('calcEmbEmbalagens').value='';
   document.getElementById('calcEmbUnidadesPorEmbalagem').value='';
@@ -2311,7 +2322,7 @@ function renderItensBase(tipo){
     <div class="item-row draggable-row" data-id="${item.id}">
       <div>
         <div class="item-name">${escapeHtml(item.nome)}</div>
-        <div class="item-sub">Atualizado em ${new Date(item.ultimaAtualizacao).toLocaleDateString('pt-BR')}${tipo==='ingrediente' ? ' · unidade: '+(item.unidadeBase||'un')+((item.equivalencias&&item.equivalencias.length>0)?' · '+item.equivalencias.map(eq=>'1 '+eq.unidade1+' = '+eq.qtd2+eq.unidade2).join(', '):'') : (item.capacidadeMl?' · capacidade: '+item.capacidadeMl+'ml':'')}</div>
+        <div class="item-sub">Atualizado em ${new Date(item.ultimaAtualizacao).toLocaleDateString('pt-BR')}${tipo==='ingrediente' ? ' · unidade: '+(item.unidadeBase||'un')+((item.equivalencias&&item.equivalencias.length>0)?' · '+item.equivalencias.map(eq=>'1 '+eq.unidade1+' = '+eq.qtd2+eq.unidade2).join(', '):'') : ((item.capacidadeMl?' · capacidade: '+item.capacidadeMl+'ml':'')+(item.multiplicadorReferenciaPadrao?' · parte de '+item.multiplicadorReferenciaPadrao+'x a receita':''))}</div>
         ${tipo==='ingrediente' ? `<button class="btn-ghost btn-small" onclick="ajustarUnidadeItem('${item.id}')" style="margin-top:4px;padding:3px 8px;font-size:11px;">⚙️ unidade</button>` : ''}
       </div>
       <div style="text-align:right;">
