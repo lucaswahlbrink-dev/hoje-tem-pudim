@@ -1274,6 +1274,7 @@ async function loadState(){
         migrarEmbalagensAntigas();
         migrarFormatosReceitas();
         migrarEquivalenciasAntigas();
+        migrarEstoqueProntoParaLotes();
       }
     }
   }catch(e){
@@ -1309,6 +1310,22 @@ function migrarEquivalenciasAntigas(){
     if(item.equivalencia && item.equivalencias.length===0){
       item.equivalencias.push({ qtd1:item.equivalencia.qtd1, unidade1:item.equivalencia.unidade1, qtd2:item.equivalencia.qtd2, unidade2:item.equivalencia.unidade2 });
     }
+  });
+}
+
+// versão anterior: "pronto para vender" ficava travado por formato (estoquePronto em cada formato).
+// Agora vira um lote só por receita, que pode ser vendido em qualquer formato dela.
+function migrarEstoqueProntoParaLotes(){
+  state.receitas.forEach(r=>{
+    if(r.lotesProntos!==undefined) return; // já migrado
+    let lotes = 0;
+    (r.formatosVenda||[]).forEach(f=>{
+      if(f.estoquePronto>0 && f.rendimento>0){
+        lotes += f.estoquePronto / f.rendimento;
+      }
+      delete f.estoquePronto;
+    });
+    r.lotesProntos = lotes;
   });
 }
 
@@ -1456,24 +1473,17 @@ function renderFazerReceitaArea(){
   const r = state.receitas.find(x=>x.id===receitaId);
   if(!r){ el.innerHTML=''; return; }
 
-  const formatos = r.formatosVenda||[];
   let html = `
-    <div class="divider-label">Ajustar tamanho do lote</div>
-    <label>Qual formato você vai produzir?</label>
-    <select id="fazerReceitaFormatoProduzido">
-      <option value="">Nenhum específico — só ajustar múltiplo da receita</option>
-      ${formatos.map(f=>`<option value="${f.id}">${escapeHtml(f.nome)} (rende ${f.rendimento} na receita original)</option>`).join('')}
-    </select>
-    <div id="fazerReceitaFormatoQtdArea" class="hidden">
-      <label>Quantas unidades desse formato você vai fazer?</label>
-      <input type="number" id="fazerReceitaFormatoQtdDesejada" class="mono">
-    </div>
-    <div id="fazerReceitaMultiplicadorArea">
-      <label>Fazer quantas vezes a receita original?</label>
-      <input type="number" id="fazerReceitaMultiplicador" class="mono" value="1" step="0.5" min="0.1">
-      <p class="section-note" style="margin-top:-6px;">Ex: 2 para o dobro, 0,5 para metade. A receita original é sempre "1".</p>
-    </div>
-    <p class="section-note" id="fazerReceitaResumoEscala"></p>
+    <div class="divider-label">Tamanho da receita</div>
+    <label>Fazer quantas vezes a receita original? (ajusta os ingredientes)</label>
+    <input type="number" id="fazerReceitaMultiplicador" class="mono" value="1" step="0.5" min="0.1">
+    <p class="section-note" style="margin-top:-6px;">Ex: 4 para uma receita 4x maior (mais ingredientes, forma(s) maior(es)).</p>
+
+    <div class="divider-label">Quantos moldes/lotes prontos isso vira</div>
+    <label>Isso vai virar quantos moldes prontos? (não muda com o tamanho da receita)</label>
+    <input type="number" id="fazerReceitaQtdLotes" class="mono" value="1" step="1" min="0">
+    <p class="section-note" style="margin-top:-6px;">Ex: 1 forma cheia continua sendo "1" molde pronto, seja ela pequena ou grande (as fatias só ficam maiores/menores). Só aumenta esse número se estiver fazendo formas separadas de uma vez.</p>
+
     <div class="divider-label">Ingredientes para este lote</div>
     <div id="fazerReceitaIngredientesLista"></div>
     <button class="btn-primary" id="btnConfirmarFazerReceita" style="margin-top:10px;">✅ Fazer receita (desconta do estoque)</button>
@@ -1482,41 +1492,14 @@ function renderFazerReceitaArea(){
 
   calcularEscalaFazerReceita(r);
 
-  document.getElementById('fazerReceitaFormatoProduzido').addEventListener('change', ()=>{
-    const formatoId = document.getElementById('fazerReceitaFormatoProduzido').value;
-    const areaQtd = document.getElementById('fazerReceitaFormatoQtdArea');
-    const areaMult = document.getElementById('fazerReceitaMultiplicadorArea');
-    if(formatoId){
-      const formato = formatos.find(f=>f.id===formatoId);
-      areaQtd.classList.remove('hidden');
-      areaMult.classList.add('hidden');
-      document.getElementById('fazerReceitaFormatoQtdDesejada').value = formato ? formato.rendimento : 1;
-    }else{
-      areaQtd.classList.add('hidden');
-      areaMult.classList.remove('hidden');
-    }
-    calcularEscalaFazerReceita(r);
-  });
-  document.getElementById('fazerReceitaFormatoQtdDesejada').addEventListener('input', ()=>calcularEscalaFazerReceita(r));
   document.getElementById('fazerReceitaMultiplicador').addEventListener('input', ()=>calcularEscalaFazerReceita(r));
 
   document.getElementById('btnConfirmarFazerReceita').addEventListener('click', ()=>confirmarFazerReceita(r));
 }
 
 function calcularEscalaFazerReceita(r){
-  const formatoSelect = document.getElementById('fazerReceitaFormatoProduzido');
-  const formatoId = formatoSelect ? formatoSelect.value : '';
-  const resumoEl = document.getElementById('fazerReceitaResumoEscala');
-  if(formatoId){
-    const formato = (r.formatosVenda||[]).find(f=>f.id===formatoId);
-    const qtdDesejada = parseFloat(document.getElementById('fazerReceitaFormatoQtdDesejada').value)||0;
-    fazerReceitaFatorEscala = (formato && formato.rendimento && qtdDesejada>0) ? (qtdDesejada/formato.rendimento) : 1;
-    if(resumoEl) resumoEl.textContent = formato ? `Isso equivale a ${arredondarCompra(fazerReceitaFatorEscala)}x a receita original.` : '';
-  }else{
-    const inputMultiplicador = document.getElementById('fazerReceitaMultiplicador');
-    fazerReceitaFatorEscala = inputMultiplicador ? (parseFloat(inputMultiplicador.value)||1) : 1;
-    if(resumoEl) resumoEl.textContent = '';
-  }
+  const inputMultiplicador = document.getElementById('fazerReceitaMultiplicador');
+  fazerReceitaFatorEscala = inputMultiplicador ? (parseFloat(inputMultiplicador.value)||1) : 1;
 
   let lista = r.ingredientes.map(ing=>({
     itemId: ing.itemId, nome: ing.nome, unidade: ing.unidade,
@@ -1588,12 +1571,6 @@ function renderFazerReceitaIngredientesLista(){
 }
 
 function confirmarFazerReceita(r){
-  const formatoSelectPrevio = document.getElementById('fazerReceitaFormatoProduzido');
-  const formatoIdPrevio = formatoSelectPrevio ? formatoSelectPrevio.value : '';
-  if(!formatoIdPrevio){
-    const confirmou = confirm('Você não escolheu um formato ("Qual formato você vai produzir?"). Sem isso, o estoque de ingredientes desconta normalmente, mas NADA aparece em "Estoque pronto para venda". Quer continuar assim mesmo?');
-    if(!confirmou) return;
-  }
   const itensSemConversao = [];
   fazerReceitaIngredientesEscalados.forEach(ing=>{
     const item = state.custosItens.find(i=>i.id===ing.itemId);
@@ -1607,21 +1584,9 @@ function confirmarFazerReceita(r){
     item.estoqueAtual = Math.max(0, (item.estoqueAtual||0) - necessario);
   });
 
-  const formatoSelect = document.getElementById('fazerReceitaFormatoProduzido');
-  const formatoId = formatoSelect ? formatoSelect.value : '';
-  const qtdFormato = formatoId ? (parseFloat(document.getElementById('fazerReceitaFormatoQtdDesejada').value)||0) : 0;
-  let mensagemPronto = '';
-  if(formatoId && qtdFormato>0){
-    const formato = (r.formatosVenda||[]).find(f=>f.id===formatoId);
-    if(formato){
-      formato.estoquePronto = (formato.estoquePronto||0) + qtdFormato;
-      mensagemPronto = ` ${qtdFormato}x "${formato.nome}" prontos para vender.`;
-      if(formato.embalagemVinculadaId){
-        const emb = state.embalagens.find(e=>e.id===formato.embalagemVinculadaId);
-        if(emb) emb.estoqueAtual = Math.max(0, (emb.estoqueAtual||0) - qtdFormato);
-      }
-    }
-  }
+  const qtdLotes = parseFloat(document.getElementById('fazerReceitaQtdLotes').value)||0;
+  r.lotesProntos = (r.lotesProntos||0) + qtdLotes;
+  let mensagemPronto = qtdLotes>0 ? ` +${arredondarCompra(qtdLotes)} molde(s) pronto(s) adicionado(s) ao estoque.` : ' Nenhum molde pronto foi adicionado (você colocou 0).';
 
   saveState().then(ok=>{
     if(ok){
@@ -1774,7 +1739,7 @@ async function lerNotaComIA(base64, mediaType){
     raw = raw.replace(/```json|```/g,'').trim();
     let parsed = [];
     try{ parsed = JSON.parse(raw); }catch(err){ parsed = []; }
-    extractedItems = parsed.map(p=>({id:uid(), nome:p.nome||'', quantidade:p.quantidade||1, valor:p.valor||0, tipo:'ingrediente', unidadeSugerida: UNIDADES.includes(p.unidadeSugerida) ? p.unidadeSugerida : 'un'}));
+    extractedItems = parsed.map(p=>({id:uid(), nome:p.nome||'', quantidade:p.quantidade||1, valor:p.valor||0, tipo:'ingrediente', unidadeSugerida: UNIDADES.includes(p.unidadeSugerida) ? p.unidadeSugerida : 'un', unidadesPorEmbalagem: (parseFloat(p.unidadesPorEmbalagem)>0 ? parseFloat(p.unidadesPorEmbalagem) : 1)}));
     renderExtractedItems();
   }catch(err){
     console.error(err);
@@ -2016,6 +1981,10 @@ function renderExtractedItems(){
         <input type="number" value="${item.quantidade}" class="ex-qtd qtd mono" placeholder="Qtd">
         <input type="number" value="${item.valor}" class="ex-valor valor mono" placeholder="R$">
         <select class="ex-unidade unidade-select"></select>
+        <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);">
+          <input type="number" value="${item.unidadesPorEmbalagem||1}" class="ex-un-pacote mono" style="width:56px;" min="1">
+          un/pacote
+        </span>
         <select class="ex-vincular"></select>
       </div>`;
   });
@@ -2042,21 +2011,24 @@ function renderExtractedItems(){
       const tipo = row.querySelector('.ex-tipo').value;
       const qtd = parseFloat(row.querySelector('.ex-qtd').value)||1;
       const valor = parseFloat(row.querySelector('.ex-valor').value)||0;
-      const unidadeBase = row.querySelector('.ex-unidade').value;
+      let unidadeBase = row.querySelector('.ex-unidade').value;
+      const unidadesPorPacote = parseFloat(row.querySelector('.ex-un-pacote').value)||1;
       const vinculoId = row.querySelector('.ex-vincular').value;
       if(!nome) return;
-      const custoUnitario = qtd>0 ? valor/qtd : valor;
+      const totalUnidades = qtd * unidadesPorPacote;
+      const custoUnitario = totalUnidades>0 ? valor/totalUnidades : valor;
+      if(unidadesPorPacote>1) unidadeBase = 'un'; // preço já é por unidade individual, não por pacote
       const agora = new Date().toISOString();
       const arr = TIPO_CONFIG[tipo].arr();
       const existente = vinculoId ? arr.find(i=>i.id===vinculoId) : null;
       if(existente){
         existente.precoUnitario = custoUnitario;
-        existente.estoqueAtual = (existente.estoqueAtual||0) + qtd;
+        existente.estoqueAtual = (existente.estoqueAtual||0) + totalUnidades;
         existente.ultimaAtualizacao = agora;
         if(!existente.historico) existente.historico = [];
         existente.historico.push({data: agora, preco: custoUnitario});
       }else{
-        arr.push({id:uid(), nome, precoUnitario:custoUnitario, estoqueAtual:qtd, unidadeBase: tipo==='ingrediente'?unidadeBase:'un', ultimaAtualizacao:agora, historico:[{data:agora, preco:custoUnitario}]});
+        arr.push({id:uid(), nome, precoUnitario:custoUnitario, estoqueAtual:totalUnidades, unidadeBase: tipo==='ingrediente'?unidadeBase:'un', ultimaAtualizacao:agora, historico:[{data:agora, preco:custoUnitario}]});
       }
     });
     saveState().then(ok=>{
@@ -3784,7 +3756,9 @@ function atualizarNotaProntos(){
   const r = state.receitas.find(x=>x.id===receitaId);
   const formato = r ? (r.formatosVenda||[]).find(f=>f.id===formatoId) : null;
   const nota = document.getElementById('vendaProntosNota');
-  nota.textContent = (formato && formato.estoquePronto>0) ? `🍮 ${formato.estoquePronto} prontos em estoque` : '';
+  const lotes = r ? (r.lotesProntos||0) : 0;
+  const qtdPossivel = (formato && formato.rendimento) ? Math.floor(lotes*formato.rendimento*10000)/10000 : 0;
+  nota.textContent = qtdPossivel>0 ? `🍮 ${qtdPossivel} prontos em estoque (nesse formato)` : '';
   if(formato && formato.precoVenda>0){
     document.getElementById('vendaValor').value = formato.precoVenda;
   }
@@ -3793,22 +3767,23 @@ function atualizarNotaProntos(){
 function renderProdutosProntos(){
   const el = document.getElementById('produtosProntosList');
   if(!el) return;
-  const prontos = [];
-  state.receitas.forEach(r=>{
-    (r.formatosVenda||[]).forEach(f=>{
-      if(f.estoquePronto>0) prontos.push({ receitaNome:r.nome, formatoNome:f.nome, qtd:f.estoquePronto });
-    });
-  });
-  if(prontos.length===0){
-    el.innerHTML = `<div class="section-note">Nada pronto ainda. Use "Fazer Receita" para produzir e marcar como pronto.</div>`;
+  const receitasComEstoque = state.receitas.filter(r=>(r.lotesProntos||0)>0.0001);
+  if(receitasComEstoque.length===0){
+    el.innerHTML = `<div class="section-note">Nada pronto ainda. Use "Fazer Receita" para produzir.</div>`;
     return;
   }
-  el.innerHTML = prontos.map(p=>`
-    <div class="item-row">
-      <div class="item-name">${escapeHtml(p.receitaNome)} — ${escapeHtml(p.formatoNome)}</div>
-      <div class="mono item-name">${p.qtd}</div>
-    </div>
-  `).join('');
+  el.innerHTML = receitasComEstoque.map(r=>{
+    const lotes = r.lotesProntos;
+    const traducoes = (r.formatosVenda||[]).map(f=>{
+      const qtdPossivel = Math.floor(lotes * (f.rendimento||0) * 10000)/10000;
+      return `${escapeHtml(f.nome)}: até ${qtdPossivel} un`;
+    }).join(' · ');
+    return `
+    <div class="item-row" style="flex-direction:column;align-items:flex-start;">
+      <div class="item-name">${escapeHtml(r.nome)} — ${arredondarCompra(lotes)}x a receita pronta</div>
+      ${traducoes ? `<div class="item-sub">${traducoes}</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 function atualizarVisibilidadeTaxa(){
@@ -3840,14 +3815,17 @@ document.getElementById('btnRegistrarVenda').addEventListener('click', ()=>{
   if(!valor && valor!==0){ showToast('Informe o valor recebido.'); return; }
   const r = state.receitas.find(x=>x.id===receitaId);
   const formato = r ? (r.formatosVenda||[]).find(f=>f.id===formatoId) : null;
-  const prontoDisponivel = formato ? (formato.estoquePronto||0) : 0;
-  if(prontoDisponivel < qtd){
-    showToast(`Não tem estoque pronto suficiente: tem ${prontoDisponivel}, tentando vender ${qtd}. Faça a receita primeiro em "Fazer".`);
+  if(!formato || !formato.rendimento){ showToast('Esse formato não tem rendimento configurado.'); return; }
+  const loteNecessario = qtd / formato.rendimento;
+  const loteDisponivel = r ? (r.lotesProntos||0) : 0;
+  if(loteDisponivel < loteNecessario){
+    const qtdMaximaPossivel = Math.floor(loteDisponivel*formato.rendimento*10000)/10000;
+    showToast(`Não tem estoque pronto suficiente: dá pra vender no máximo ${qtdMaximaPossivel} nesse formato. Faça a receita primeiro em "Fazer".`);
     return;
   }
   const valorLiquido = taxaPercentual>0 ? valor - (valor*taxaPercentual/100) : valor;
   state.vendas.push({id:uid(), receitaId, formatoId, quantidade:qtd, comprador, data, valor, canal, formaPagamento, taxaPercentual, valorLiquido, embalagens});
-  formato.estoquePronto = Math.max(0, formato.estoquePronto - qtd);
+  r.lotesProntos = Math.max(0, loteDisponivel - loteNecessario);
   document.getElementById('vendaComprador').value='';
   document.getElementById('vendaValor').value='';
   document.getElementById('vendaQtd').value='';
