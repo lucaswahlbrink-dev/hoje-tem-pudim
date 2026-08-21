@@ -3644,9 +3644,10 @@ function renderComparacaoTabela(r){
     const precoVenda = f.precoVenda||0;
     const lucroUnidade = precoVenda - custoUnidade;
     const margem = precoVenda>0 ? (lucroUnidade/precoVenda)*100 : null;
+    const markup = custoUnidade>0 ? (lucroUnidade/custoUnidade)*100 : null;
     const unidadesPossiveis = (f.rendimento||0) * (multiplicadorComparacao/multiplicadorRef);
     const lucroTotal = lucroUnidade * unidadesPossiveis;
-    return { nome: f.nome, custoUnidade, precoVenda, lucroUnidade, margem, unidadesPossiveis, lucroTotal };
+    return { nome: f.nome, custoUnidade, precoVenda, lucroUnidade, margem, markup, unidadesPossiveis, lucroTotal };
   }).sort((a,b)=>b.lucroTotal-a.lucroTotal);
 
   if(linhas.every(l=>l.precoVenda===0)){
@@ -3660,6 +3661,7 @@ function renderComparacaoTabela(r){
       <th class="num">Custo/un</th>
       <th class="num">Preço/un</th>
       <th class="num">Lucro/un</th>
+      <th class="num">Markup</th>
       <th class="num">Margem</th>
       <th class="num">Unidades possíveis</th>
       <th class="num">Lucro total</th>
@@ -3671,6 +3673,7 @@ function renderComparacaoTabela(r){
           <td class="num mono">${brl(l.custoUnidade)}</td>
           <td class="num mono">${brl(l.precoVenda)}</td>
           <td class="num mono" style="${l.lucroUnidade<0?'color:#A64545;':''}">${brl(l.lucroUnidade)}</td>
+          <td class="num mono">${l.markup!==null ? l.markup.toFixed(0)+'%' : '—'}</td>
           <td class="num mono">${l.margem!==null ? l.margem.toFixed(0)+'%' : '—'}</td>
           <td class="num mono">${arredondarCompra(l.unidadesPossiveis)}</td>
           <td class="num mono" style="font-weight:700;${l.lucroTotal<0?'color:#A64545;':''}">${brl(l.lucroTotal)}</td>
@@ -3678,7 +3681,7 @@ function renderComparacaoTabela(r){
       `).join('')}
     </tbody>
   </table>
-  <p class="section-note">🏆 = maior lucro total, fazendo ${multiplicadorComparacao}x a receita e vendendo tudo naquele formato.</p>`;
+  <p class="section-note">🏆 = maior lucro total, fazendo ${multiplicadorComparacao}x a receita e vendendo tudo naquele formato. Markup = lucro ÷ custo (quanto você aumentou em cima do custo). Margem = lucro ÷ preço de venda (quanto do preço final é lucro).</p>`;
 }
 
 function toggleAddEmbalagemFormatoPrecif(formatoId){
@@ -3817,6 +3820,11 @@ function renderFormatosPrecificacao(r){
         <div class="result-box"><div class="label">Custo</div><div class="value mono" id="formatoCusto-${f.id}">${brl(custoUnidade)}</div></div>
         <div class="result-box profit"><div class="label">Lucro</div><div class="value mono" id="formatoLucro-${f.id}">${brl(lucro)}</div></div>
       </div>
+      <label style="margin-top:10px;">Preço de revenda (opcional, para quem compra pra revender)</label>
+      <input type="number" class="mono formato-revenda-input" data-formato-id="${f.id}" data-custo-unidade="${custoUnidade}" value="${f.precoRevenda||''}" placeholder="0,00">
+      <div class="result-grid">
+        <div class="result-box profit"><div class="label">Lucro na revenda</div><div class="value mono" id="formatoLucroRevenda-${f.id}">${brl((f.precoRevenda||0)-custoUnidade)}</div></div>
+      </div>
     </div>`;
   }).join('');
   el.querySelectorAll('.formato-preco-input').forEach(inp=>{
@@ -3824,6 +3832,13 @@ function renderFormatosPrecificacao(r){
       const custoU = parseFloat(inp.dataset.custoUnidade)||0;
       const preco = parseFloat(inp.value)||0;
       document.getElementById('formatoLucro-'+inp.dataset.formatoId).textContent = brl(preco-custoU);
+    });
+  });
+  el.querySelectorAll('.formato-revenda-input').forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      const custoU = parseFloat(inp.dataset.custoUnidade)||0;
+      const preco = parseFloat(inp.value)||0;
+      document.getElementById('formatoLucroRevenda-'+inp.dataset.formatoId).textContent = brl(preco-custoU);
     });
   });
 }
@@ -3874,6 +3889,10 @@ document.getElementById('btnSalvarPrecos').addEventListener('click', ()=>{
   document.querySelectorAll('.formato-preco-input').forEach(inp=>{
     const f = (r.formatosVenda||[]).find(x=>x.id===inp.dataset.formatoId);
     if(f) f.precoVenda = parseFloat(inp.value)||0;
+  });
+  document.querySelectorAll('.formato-revenda-input').forEach(inp=>{
+    const f = (r.formatosVenda||[]).find(x=>x.id===inp.dataset.formatoId);
+    if(f) f.precoRevenda = parseFloat(inp.value)||0;
   });
   (r.formatosVenda||[]).forEach(f=>{
     const checklistEl = document.getElementById('precifExtrasChecklist-'+f.id);
